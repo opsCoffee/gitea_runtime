@@ -24,7 +24,7 @@ RUN git clone https://github.com/projectdiscovery/templates-stats.git --depth 1 
 RUN rm -rf /app
 
 # 第二阶段：创建运行时镜像
-FROM alpine:3.15
+FROM node:14-alpine
 
 # 复制编译好的二进制文件到新镜像
 COPY --from=builder /templates-stats /usr/local/bin/templates-stats
