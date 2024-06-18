@@ -1,0 +1,36 @@
+# Use the latest stable Alpine Linux image
+FROM alpine:3.20.0
+
+# Set environment variables
+ENV TEXMFHOME=/usr/share/texmf-dist
+ENV LANG en_US.UTF-8
+ENV LANGUAGE en_US.UTF-8
+ENV LC_ALL=en_US.UTF-8
+
+# Enable community and testing repositories and install necessary base packages
+RUN echo "https://mirror.tuna.tsinghua.edu.cn/alpine/latest-stable/main" > /etc/apk/repositories && \
+    echo "https://mirror.tuna.tsinghua.edu.cn/alpine/latest-stable/community" >> /etc/apk/repositories && \
+    echo "https://mirror.tuna.tsinghua.edu.cn/alpine/edge/testing" >> /etc/apk/repositories && \
+    apk update && \
+    apk add texmf-dist texlive texmaker font-noto-cjk texlive-xetex wget perl xz tar && \
+    echo "Asia/Shanghai" > /etc/timezone && \
+    wget https://mirrors.tuna.tsinghua.edu.cn/CTAN/systems/texlive/tlnet/install-tl-unx.tar.gz && \
+    tar -xzf install-tl-unx.tar.gz && \
+    cd install-tl-20* && \
+    printf "selected_scheme scheme-full\n" > texlive.profile && \
+    ./install-tl --profile texlive.profile -repository http://mirrors.tuna.tsinghua.edu.cn/CTAN/systems/texlive/tlnet/ && \
+    ln -s /usr/local/texlive/2024/bin/x86_64-linux/* /usr/bin/ && \
+    tlmgr option repository https://mirrors.tuna.tsinghua.edu.cn/CTAN/systems/texlive/tlnet && \
+    cd .. && \
+    rm -rf install-tl-unx.tar.gz install-tl-20*
+
+# Set environment variables for TeX Live
+ENV PATH="/usr/local/texlive/2024/bin/x86_64-linuxmusl:${PATH}"
+ENV MANPATH="/usr/local/texlive/2024/texmf-dist/doc/man:${MANPATH}"
+ENV INFOPATH="/usr/local/texlive/2024/texmf-dist/doc/info:${INFOPATH}"
+
+# Set up working directory
+WORKDIR /workspace
+
+# Set the default command to bash (or sh)
+CMD ["/bin/sh"]
