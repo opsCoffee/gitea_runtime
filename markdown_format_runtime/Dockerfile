@@ -1,4 +1,4 @@
-FROM node:14-alpine
+FROM node:22.6.0-alpine
 
 RUN apk add --no-cache dos2unix curl vim bash git \
     && npm i -g markdownlint-cli2 \
