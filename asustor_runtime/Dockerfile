@@ -6,10 +6,8 @@ ENV LANG=en_US.UTF-8 \
 
 # 安装 Python 和 Git
 RUN apk add --no-cache python3 git && \
-    ln -sf python3 /usr/bin/python
-
-# 验证安装
-RUN node -v && \
+    ln -sf python3 /usr/bin/python && \
+    node -v && \
     npm -v && \
     python --version && \
     git --version
