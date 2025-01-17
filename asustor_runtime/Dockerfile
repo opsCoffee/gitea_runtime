@@ -1,9 +1,14 @@
-FROM node:22.6.0-alpine
-
-# 安装必要的依赖并清理缓存
-RUN apk add --update --no-cache python3 git && \
-    ln -sf python3 /usr/bin/python && \
-    rm -rf /var/cache/apk/*
+FROM node:lts-slim
 
 # 设置环境变量
-ENV LANG en_US.UTF-8
+ENV LANG=en_US.UTF-8 \
+    PYTHONUNBUFFERED=1
+
+# 安装必要的依赖
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends python3 git && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
+
+# 设置工作目录
+WORKDIR /app
