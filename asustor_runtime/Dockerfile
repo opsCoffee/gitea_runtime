@@ -1,14 +1,15 @@
-FROM node:lts-slim
+FROM node:lts-alpine
 
 # 设置环境变量
 ENV LANG=en_US.UTF-8 \
     PYTHONUNBUFFERED=1
 
-# 安装必要的依赖
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends python3 git && \
-    apt-get clean && \
-    rm -rf /var/lib/apt/lists/*
+# 安装 Python 和 Git
+RUN apk add --no-cache python3 git && \
+    ln -sf python3 /usr/bin/python
 
-# 设置工作目录
-WORKDIR /app
+# 验证安装
+RUN node -v && \
+    npm -v && \
+    python --version && \
+    git --version
