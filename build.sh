@@ -15,7 +15,7 @@ handle_docker_image() {
 
 # 定义镜像细节
 images=(
-    "template_run:v0.1:template_runtime/Dockerfile"
+    #"template_run:v0.1:template_runtime/Dockerfile"
     "alpine_runtime:v0.2:markdown_format_runtime/Dockerfile"
     "asustor_runtime:v0.1:asustor_runtime/Dockerfile"
 )
