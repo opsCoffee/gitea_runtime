@@ -996,3 +996,71 @@ CMD ["tlmgr", "--help"]
 ### 总结
 
 通过在最终镜像中安装 `libfontconfig` 库，解决了 `xelatex` 运行时缺少共享库的问题。现在镜像应该能够正常编译包含中文的 TeX 文件。如果仍有问题，请检查字体是否安装正确，并确保编译命令使用 `xelatex`。
+
+
+
+### Dockerfile 分析
+
+这个 Dockerfile 分为两个阶段：
+
+1. **第一阶段 (`tex-builder`)**:
+   - 使用 `debian:stable-slim` 作为基础镜像。
+   - 安装了一些必要的依赖（如 `wget`, `perl`, `fontconfig` 等）。
+   - 下载并安装了 TinyTeX，并安装了一些常用的 TeX 包。
+   - 清理了不必要的依赖和临时文件。
+
+2. **第二阶段**:
+   - 使用 `node:lts-slim` 作为基础镜像。
+   - 安装了 `perl` 和 `libfontconfig1`。
+   - 从第一阶段复制了 TinyTeX 相关文件。
+   - 设置了环境变量和工作目录。
+   - 验证了 `tlmgr` 是否可用，并设置了默认命令。
+
+### 镜像命名
+
+你可以根据镜像的功能来命名。由于这个镜像主要用于 TinyTeX 环境，并且基于 Node.js，因此可以命名为 `tinytex-node`。
+
+### 编译命令
+
+你需要编译两个标签的镜像：`latest` 和 `年月日` 标识的标签（例如 `20231025`）。
+
+假设你当前的 Dockerfile 文件名为 `Dockerfile`，并且你希望将镜像推送到 Docker Hub 上的 `your-dockerhub-username` 仓库，编译命令如下：
+
+```bash
+# 编译 latest 标签的镜像
+docker build -t your-dockerhub-username/tinytex-node:latest .
+
+# 编译 年月日 标签的镜像（例如 20231025）
+docker build -t your-dockerhub-username/tinytex-node:20231025 .
+```
+
+### 推送镜像到 Docker Hub
+
+如果你希望将镜像推送到 Docker Hub，可以使用以下命令：
+
+```bash
+# 登录 Docker Hub
+docker login
+
+# 推送 latest 标签的镜像
+docker push your-dockerhub-username/tinytex-node:latest
+
+# 推送 年月日 标签的镜像
+docker push your-dockerhub-username/tinytex-node:20231025
+```
+
+### 总结
+
+- **镜像命名**: `tinytex-node`
+- **编译命令**:
+  ```bash
+  docker build -t your-dockerhub-username/tinytex-node:latest .
+  docker build -t your-dockerhub-username/tinytex-node:20231025 .
+  ```
+- **推送命令**:
+  ```bash
+  docker push your-dockerhub-username/tinytex-node:latest
+  docker push your-dockerhub-username/tinytex-node:20231025
+  ```
+
+请将 `your-dockerhub-username` 替换为你的 Docker Hub 用户名。
