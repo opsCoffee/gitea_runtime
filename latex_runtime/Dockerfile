@@ -15,15 +15,12 @@ RUN apt-get update && \
 
 RUN perl -mFile::Find -e 1
 
-RUN wget -qO- "https://yihui.org/tinytex/install-bin-unix.sh" | sh && \
-    ls -l /root/bin && \
-    ls -l /root/.TinyTeX/bin/x86_64-linux
+RUN wget -qO- "https://yihui.org/tinytex/install-bin-unix.sh" | sh
 
 ENV PATH="/root/bin:/root/.TinyTeX/bin/x86_64-linux:${PATH}"
 
-RUN echo $PATH && tlmgr --version
-
-RUN tlmgr update --self --all && \
+RUN tlmgr --version && \
+    tlmgr update --self --all && \
     tlmgr install enumitem titlesec fontawesome5 parskip ctex
 
 RUN apt-get purge -y wget && \
