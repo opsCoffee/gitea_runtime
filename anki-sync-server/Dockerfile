@@ -1,7 +1,7 @@
 # Dockerfile
 FROM rust:1.75-alpine AS builder
 
-ARG VERSION="24.06"
+ARG VERSION="25.02"
 
 # RUN set -aeux && sed -i "s/dl-cdn.alpinelinux.org/mirrors.ustc.edu.cn/g" /etc/apk/repositories
 RUN set -aeux && apk add --no-cache binutils git musl-dev protobuf-dev
