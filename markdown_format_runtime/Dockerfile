@@ -4,7 +4,7 @@ FROM node:lts-alpine
 ENV LANG=en_US.utf8
 
 # 安装必要的工具和全局 npm 包，下载并执行远程脚本，并清理缓存
-RUN apk add --no-cache bash curl git python3 vim dos2unix && \
+RUN apk add --no-cache bash curl git python3 vim dos2unix perl && \
     ln -sf python3 /usr/bin/python && \
     npm install -g markdownlint-cli2 && \
     curl -sSL https://git.io/JcGER | /bin/ash && \
