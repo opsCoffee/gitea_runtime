@@ -14,63 +14,13 @@ env:
   REGISTRY_NAMESPACE: kenyon
 
 jobs:
-  # 检测变更的运行时
-  detect-changes:
-    runs-on: ubuntu-latest
-    outputs:
-      matrix: ${{ steps.changes.outputs.matrix }}
-      any-changed: ${{ steps.changes.outputs.any-changed }}
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      
-      - name: Detect changes
-        id: changes
-        run: |
-          # 检测哪些运行时发生了变更
-          changed_runtimes=()
-          
-          if [ "${{ github.event_name }}" = "schedule" ] || [ "${{ github.ref_type }}" = "tag" ]; then
-            # 定时构建或标签推送时构建所有镜像
-            changed_runtimes=("markdown" "asustor" "template" "latex")
-          else
-            # 检测文件变更
-            if git diff --name-only HEAD~1 HEAD | grep -E "(build\.sh|test_images\.sh|\.github/workflows|runtime-markdown)" > /dev/null; then
-              changed_runtimes+=("markdown")
-            fi
-            if git diff --name-only HEAD~1 HEAD | grep -E "(build\.sh|test_images\.sh|\.github/workflows|runtime-asustor)" > /dev/null; then
-              changed_runtimes+=("asustor")
-            fi
-            if git diff --name-only HEAD~1 HEAD | grep -E "(build\.sh|test_images\.sh|\.github/workflows|runtime-template)" > /dev/null; then
-              changed_runtimes+=("template")
-            fi
-            if git diff --name-only HEAD~1 HEAD | grep -E "(build\.sh|test_images\.sh|\.github/workflows|runtime-latex)" > /dev/null; then
-              changed_runtimes+=("latex")
-            fi
-          fi
-          
-          # 如果没有检测到变更，至少构建一个镜像用于测试
-          if [ ${#changed_runtimes[@]} -eq 0 ]; then
-            changed_runtimes=("markdown")
-          fi
-          
-          # 生成矩阵
-          matrix_json=$(printf '%s\n' "${changed_runtimes[@]}" | jq -R . | jq -s .)
-          echo "matrix={\"runtime\":$matrix_json}" >> $GITHUB_OUTPUT
-          echo "any-changed=true" >> $GITHUB_OUTPUT
-          
-          echo "检测到变更的运行时: ${changed_runtimes[*]}"
-
-  # 并行构建和测试
+  # 简化的构建策略 - 避免复杂的变更检测
   build-and-test:
-    needs: detect-changes
-    if: needs.detect-changes.outputs.any-changed == 'true'
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
-      matrix: ${{ fromJson(needs.detect-changes.outputs.matrix) }}
+      matrix:
+        runtime: [markdown, asustor, template, latex]
     
     steps:
       - name: Checkout code
@@ -91,12 +41,53 @@ jobs:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
       
+      - name: Check if runtime changed
+        id: check-changes
+        run: |
+          # 简化的变更检测
+          should_build="false"
+          
+          if [ "${{ github.event_name }}" = "schedule" ] || [ "${{ github.ref_type }}" = "tag" ]; then
+            # 定时构建或标签推送时总是构建
+            should_build="true"
+            echo "定时构建或标签推送，构建所有镜像"
+          else
+            # 检测文件变更
+            if [ "${{ github.event_name }}" = "pull_request" ]; then
+              base_ref="${{ github.event.pull_request.base.sha }}"
+              compare_ref="HEAD"
+            else
+              if git rev-parse --verify HEAD~1 >/dev/null 2>&1; then
+                base_ref="HEAD~1"
+                compare_ref="HEAD"
+              else
+                # 第一次提交，构建所有镜像
+                should_build="true"
+                base_ref=""
+                compare_ref=""
+              fi
+            fi
+            
+            # 检查是否有相关文件变更
+            if [ -n "$base_ref" ] && [ "$should_build" = "false" ]; then
+              if git diff --name-only "$base_ref" "$compare_ref" | grep -E "(build\.sh|test_images\.sh|\.github/workflows|runtime-${{ matrix.runtime }})" > /dev/null; then
+                should_build="true"
+                echo "检测到 ${{ matrix.runtime }} 相关文件变更"
+              fi
+            fi
+          fi
+          
+          echo "should_build=$should_build" >> $GITHUB_OUTPUT
+          echo "Runtime ${{ matrix.runtime }} should build: $should_build"
+      
       - name: Build and test ${{ matrix.runtime }} runtime
+        if: steps.check-changes.outputs.should_build == 'true'
         run: |
           chmod +x ./build.sh ./test_images.sh
           ./build.sh --only ${{ matrix.runtime }} --no-save
       
       - name: Verify image availability
+        if: steps.check-changes.outputs.should_build == 'true'
         run: |
           echo "检查本地镜像..."
           docker images | grep gitea-runtime-${{ matrix.runtime }} || {
@@ -106,10 +97,12 @@ jobs:
           }
       
       - name: Run comprehensive tests
+        if: steps.check-changes.outputs.should_build == 'true'
         run: |
           ./test_images.sh ${{ matrix.runtime }} --registry ${{ env.REGISTRY }}/${{ env.REGISTRY_NAMESPACE }}
       
       - name: Security scan with Trivy
+        if: steps.check-changes.outputs.should_build == 'true'
         uses: aquasecurity/trivy-action@master
         with:
           image-ref: 'gitea-runtime-${{ matrix.runtime }}:latest'
@@ -120,14 +113,14 @@ jobs:
           vuln-type: 'os,library'
       
       - name: Upload Trivy scan results
+        if: steps.check-changes.outputs.should_build == 'true' && always()
         uses: github/codeql-action/upload-sarif@v3
-        if: always()
         with:
           sarif_file: 'trivy-results-${{ matrix.runtime }}.sarif'
           category: 'trivy-${{ matrix.runtime }}'
       
       - name: Generate security report
-        if: always()
+        if: steps.check-changes.outputs.should_build == 'true' && always()
         run: |
           echo "## 安全扫描报告 - ${{ matrix.runtime }}" >> security-report-${{ matrix.runtime }}.md
           echo "### 扫描时间: $(date)" >> security-report-${{ matrix.runtime }}.md
@@ -141,8 +134,8 @@ jobs:
             gitea-runtime-${{ matrix.runtime }}:latest >> security-report-${{ matrix.runtime }}.md || true
       
       - name: Upload security report
+        if: steps.check-changes.outputs.should_build == 'true' && always()
         uses: actions/upload-artifact@v4
-        if: always()
         with:
           name: security-report-${{ matrix.runtime }}
           path: security-report-${{ matrix.runtime }}.md
@@ -150,7 +143,7 @@ jobs:
 
   # 汇总报告
   summary:
-    needs: [detect-changes, build-and-test]
+    needs: [build-and-test]
     if: always()
     runs-on: ubuntu-latest
     steps:
@@ -159,6 +152,7 @@ jobs:
         with:
           pattern: security-report-*
           merge-multiple: true
+        continue-on-error: true
       
       - name: Generate summary report
         run: |
@@ -169,12 +163,16 @@ jobs:
           echo "" >> summary-report.md
           
           # 合并所有安全报告
-          for report in security-report-*.md; do
-            if [ -f "$report" ]; then
-              cat "$report" >> summary-report.md
-              echo "" >> summary-report.md
-            fi
-          done
+          if ls security-report-*.md 1> /dev/null 2>&1; then
+            for report in security-report-*.md; do
+              if [ -f "$report" ]; then
+                cat "$report" >> summary-report.md
+                echo "" >> summary-report.md
+              fi
+            done
+          else
+            echo "没有找到安全报告文件" >> summary-report.md
+          fi
       
       - name: Upload summary report
         uses: actions/upload-artifact@v4
