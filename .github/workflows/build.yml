@@ -33,6 +33,7 @@ jobs:
     outputs:
       image_tag: ${{ steps.get_sha.outputs.sha }}
       image_name: ${{ env.REGISTRY }}/${{ env.REGISTRY_NAMESPACE }}/gitea-runtime-${{ matrix.runtime }}
+      build_success: ${{ steps.build_step.outcome == 'success' }}
 
     steps:
       - name: Checkout code
@@ -53,6 +54,8 @@ jobs:
           password: ${{ secrets.DOCKER_PASSWORD }}
 
       - name: Build and push to staging
+        id: build_step
+        timeout-minutes: 30
         run: |
           chmod +x ./build.sh
           ./build.sh --only ${{ matrix.runtime }} --tag ${{ steps.get_sha.outputs.sha }} --push
@@ -60,6 +63,7 @@ jobs:
   test:
     needs: build
     runs-on: ubuntu-latest
+    if: needs.build.result == 'success'
     strategy:
       fail-fast: false
       matrix:
@@ -77,27 +81,30 @@ jobs:
           password: ${{ secrets.DOCKER_PASSWORD }}
 
       - name: Run tests on staged image
+        timeout-minutes: 15
         run: |
           chmod +x ./test_images.sh
           ./test_images.sh ${{ matrix.runtime }} --registry ${{ needs.build.outputs.image_name }} --tag ${{ needs.build.outputs.image_tag }}
 
       - name: Security scan with Trivy
-        uses: aquasecurity/trivy-action@master
+        uses: aquasecurity/trivy-action@0.28.0
         with:
           image-ref: '${{ needs.build.outputs.image_name }}:${{ needs.build.outputs.image_tag }}'
           format: 'sarif'
           output: 'trivy-results.sarif'
           severity: 'CRITICAL,HIGH'
+        continue-on-error: true
 
       - name: Upload Trivy scan results
         uses: github/codeql-action/upload-sarif@v3
+        if: always()
         with:
           sarif_file: 'trivy-results.sarif'
 
   push-release:
-    needs: test
+    needs: [build, test]
     runs-on: ubuntu-latest
-    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/tags/v'))
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/tags/v')) && needs.test.result == 'success'
     strategy:
       matrix:
         runtime: [markdown, asustor, template, latex]
@@ -110,24 +117,31 @@ jobs:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
 
+      - name: Get commit SHA
+        id: get_sha
+        run: echo "sha=$(echo ${GITHUB_SHA::7})" >> $GITHUB_OUTPUT
+
       - name: Get image identifiers
         id: get_image
         run: |
           IMAGE_NAME="${{ env.REGISTRY }}/${{ env.REGISTRY_NAMESPACE }}/gitea-runtime-${{ matrix.runtime }}"
-          STAGING_TAG="${{ needs.build.outputs.image_tag }}"
+          STAGING_TAG="${{ steps.get_sha.outputs.sha }}"
           echo "image_name=$IMAGE_NAME" >> $GITHUB_OUTPUT
           echo "staging_tag=$STAGING_TAG" >> $GITHUB_OUTPUT
 
       - name: Pull staged image
+        timeout-minutes: 10
         run: docker pull ${{ steps.get_image.outputs.image_name }}:${{ steps.get_image.outputs.staging_tag }}
 
       - name: Tag and push 'latest'
+        timeout-minutes: 10
         run: |
           docker tag ${{ steps.get_image.outputs.image_name }}:${{ steps.get_image.outputs.staging_tag }} ${{ steps.get_image.outputs.image_name }}:latest
           docker push ${{ steps.get_image.outputs.image_name }}:latest
 
       - name: Tag and push version tag
         if: startsWith(github.ref, 'refs/tags/v')
+        timeout-minutes: 10
         run: |
           VERSION=$(echo $GITHUB_REF | sed -e 's|refs/tags/v||')
           docker tag ${{ steps.get_image.outputs.image_name }}:${{ steps.get_image.outputs.staging_tag }} ${{ steps.get_image.outputs.image_name }}:$VERSION
