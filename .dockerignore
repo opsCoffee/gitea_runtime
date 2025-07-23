@@ -1,0 +1,24 @@
+# 版本控制
+.git
+.gitignore
+
+# 文档和说明文件
+README.md
+*/README.md
+
+# 构建脚本
+build.sh
+test_images.sh
+
+# 测试和示例目录
+*/tests
+*/examples
+
+# 编辑器配置
+.vscode
+.idea
+
+# 临时文件
+.DS_Store
+*.log
+*.tmp
