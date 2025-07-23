@@ -1,21 +1,64 @@
-name: Build Docker Images
+name: Build and Push Docker Images
 
 on:
   push:
     branches: [ master, main ]
     tags: [ 'v*' ]
+    paths:
+      - '.github/workflows/build.yml'
+      - 'build.sh'
+      - 'test_images.sh'
+      - 'runtime-*/**'
   pull_request:
     branches: [ master, main ]
+    paths:
+      - '.github/workflows/build.yml'
+      - 'build.sh'
+      - 'test_images.sh'
+      - 'runtime-*/**'
   schedule:
-    - cron: '0 2 * * 1'  # 每周一凌晨2点运行，确保依赖更新
+    - cron: '0 2 * * 1'
 
 env:
   REGISTRY: git.httpx.online
   REGISTRY_NAMESPACE: kenyon
 
 jobs:
-  # 简化的构建策略 - 避免复杂的变更检测
-  build-and-test:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        runtime: [markdown, asustor, template, latex]
+    outputs:
+      image_tag: ${{ steps.get_sha.outputs.sha }}
+      image_name: ${{ env.REGISTRY }}/${{ env.REGISTRY_NAMESPACE }}/gitea-runtime-${{ matrix.runtime }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Get commit SHA
+        id: get_sha
+        run: echo "sha=$(echo ${GITHUB_SHA::7})" >> $GITHUB_OUTPUT
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to Docker Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Build and push to staging
+        run: |
+          chmod +x ./build.sh
+          ./build.sh --only ${{ matrix.runtime }} --tag ${{ steps.get_sha.outputs.sha }} --push
+
+  test:
+    needs: build
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -25,158 +68,67 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-        with:
-          driver-opts: |
-            network=host
-      
+
       - name: Login to Docker Registry
         uses: docker/login-action@v3
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
-      
-      - name: Check if runtime changed
-        id: check-changes
+
+      - name: Run tests on staged image
         run: |
-          # 简化的变更检测
-          should_build="false"
-          
-          if [ "${{ github.event_name }}" = "schedule" ] || [ "${{ github.ref_type }}" = "tag" ]; then
-            # 定时构建或标签推送时总是构建
-            should_build="true"
-            echo "定时构建或标签推送，构建所有镜像"
-          else
-            # 检测文件变更
-            if [ "${{ github.event_name }}" = "pull_request" ]; then
-              base_ref="${{ github.event.pull_request.base.sha }}"
-              compare_ref="HEAD"
-            else
-              if git rev-parse --verify HEAD~1 >/dev/null 2>&1; then
-                base_ref="HEAD~1"
-                compare_ref="HEAD"
-              else
-                # 第一次提交，构建所有镜像
-                should_build="true"
-                base_ref=""
-                compare_ref=""
-              fi
-            fi
-            
-            # 检查是否有相关文件变更
-            if [ -n "$base_ref" ] && [ "$should_build" = "false" ]; then
-              if git diff --name-only "$base_ref" "$compare_ref" | grep -E "(build\.sh|test_images\.sh|\.github/workflows|runtime-${{ matrix.runtime }})" > /dev/null; then
-                should_build="true"
-                echo "检测到 ${{ matrix.runtime }} 相关文件变更"
-              fi
-            fi
-          fi
-          
-          echo "should_build=$should_build" >> $GITHUB_OUTPUT
-          echo "Runtime ${{ matrix.runtime }} should build: $should_build"
-      
-      - name: Build and test ${{ matrix.runtime }} runtime
-        if: steps.check-changes.outputs.should_build == 'true'
-        run: |
-          chmod +x ./build.sh ./test_images.sh
-          ./build.sh --only ${{ matrix.runtime }} --no-save
-      
-      - name: Verify image availability
-        if: steps.check-changes.outputs.should_build == 'true'
-        run: |
-          echo "检查本地镜像..."
-          docker images | grep gitea-runtime-${{ matrix.runtime }} || {
-            echo "镜像不存在，尝试从注册表拉取..."
-            docker pull ${{ env.REGISTRY }}/${{ env.REGISTRY_NAMESPACE }}/gitea-runtime-${{ matrix.runtime }}:latest || exit 1
-            docker tag ${{ env.REGISTRY }}/${{ env.REGISTRY_NAMESPACE }}/gitea-runtime-${{ matrix.runtime }}:latest gitea-runtime-${{ matrix.runtime }}:latest
-          }
-      
-      - name: Run comprehensive tests
-        if: steps.check-changes.outputs.should_build == 'true'
-        run: |
-          ./test_images.sh ${{ matrix.runtime }} --registry ${{ env.REGISTRY }}/${{ env.REGISTRY_NAMESPACE }}
-      
+          chmod +x ./test_images.sh
+          ./test_images.sh ${{ matrix.runtime }} --registry ${{ needs.build.outputs.image_name }} --tag ${{ needs.build.outputs.image_tag }}
+
       - name: Security scan with Trivy
-        if: steps.check-changes.outputs.should_build == 'true'
         uses: aquasecurity/trivy-action@master
         with:
-          image-ref: 'gitea-runtime-${{ matrix.runtime }}:latest'
+          image-ref: '${{ needs.build.outputs.image_name }}:${{ needs.build.outputs.image_tag }}'
           format: 'sarif'
-          output: 'trivy-results-${{ matrix.runtime }}.sarif'
-          severity: 'CRITICAL,HIGH,MEDIUM'
-          ignore-unfixed: true
-          vuln-type: 'os,library'
-      
+          output: 'trivy-results.sarif'
+          severity: 'CRITICAL,HIGH'
+
       - name: Upload Trivy scan results
-        if: steps.check-changes.outputs.should_build == 'true' && always()
         uses: github/codeql-action/upload-sarif@v3
         with:
-          sarif_file: 'trivy-results-${{ matrix.runtime }}.sarif'
-          category: 'trivy-${{ matrix.runtime }}'
-      
-      - name: Generate security report
-        if: steps.check-changes.outputs.should_build == 'true' && always()
-        run: |
-          echo "## 安全扫描报告 - ${{ matrix.runtime }}" >> security-report-${{ matrix.runtime }}.md
-          echo "### 扫描时间: $(date)" >> security-report-${{ matrix.runtime }}.md
-          echo "### 镜像: gitea-runtime-${{ matrix.runtime }}:latest" >> security-report-${{ matrix.runtime }}.md
-          echo "" >> security-report-${{ matrix.runtime }}.md
-          
-          # 运行 Trivy 生成表格格式报告
-          docker run --rm -v /var/run/docker.sock:/var/run/docker.sock \
-            -v $(pwd):/workspace aquasec/trivy:latest \
-            image --format table --severity CRITICAL,HIGH,MEDIUM \
-            gitea-runtime-${{ matrix.runtime }}:latest >> security-report-${{ matrix.runtime }}.md || true
-      
-      - name: Upload security report
-        if: steps.check-changes.outputs.should_build == 'true' && always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: security-report-${{ matrix.runtime }}
-          path: security-report-${{ matrix.runtime }}.md
-          retention-days: 30
+          sarif_file: 'trivy-results.sarif'
 
-  # 汇总报告
-  summary:
-    needs: [build-and-test]
-    if: always()
+  push-release:
+    needs: test
     runs-on: ubuntu-latest
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/tags/v'))
+    strategy:
+      matrix:
+        runtime: [markdown, asustor, template, latex]
+
     steps:
-      - name: Download all security reports
-        uses: actions/download-artifact@v4
+      - name: Login to Docker Registry
+        uses: docker/login-action@v3
         with:
-          pattern: security-report-*
-          merge-multiple: true
-        continue-on-error: true
-      
-      - name: Generate summary report
+          registry: ${{ env.REGISTRY }}
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Get image identifiers
+        id: get_image
         run: |
-          echo "# Docker 镜像构建和安全扫描汇总报告" > summary-report.md
-          echo "构建时间: $(date)" >> summary-report.md
-          echo "触发事件: ${{ github.event_name }}" >> summary-report.md
-          echo "分支/标签: ${{ github.ref }}" >> summary-report.md
-          echo "" >> summary-report.md
-          
-          # 合并所有安全报告
-          if ls security-report-*.md 1> /dev/null 2>&1; then
-            for report in security-report-*.md; do
-              if [ -f "$report" ]; then
-                cat "$report" >> summary-report.md
-                echo "" >> summary-report.md
-              fi
-            done
-          else
-            echo "没有找到安全报告文件" >> summary-report.md
-          fi
-      
-      - name: Upload summary report
-        uses: actions/upload-artifact@v4
-        with:
-          name: build-summary-report
-          path: summary-report.md
-          retention-days: 90
+          IMAGE_NAME="${{ env.REGISTRY }}/${{ env.REGISTRY_NAMESPACE }}/gitea-runtime-${{ matrix.runtime }}"
+          STAGING_TAG="${{ needs.build.outputs.image_tag }}"
+          echo "image_name=$IMAGE_NAME" >> $GITHUB_OUTPUT
+          echo "staging_tag=$STAGING_TAG" >> $GITHUB_OUTPUT
+
+      - name: Pull staged image
+        run: docker pull ${{ steps.get_image.outputs.image_name }}:${{ steps.get_image.outputs.staging_tag }}
+
+      - name: Tag and push 'latest'
+        run: |
+          docker tag ${{ steps.get_image.outputs.image_name }}:${{ steps.get_image.outputs.staging_tag }} ${{ steps.get_image.outputs.image_name }}:latest
+          docker push ${{ steps.get_image.outputs.image_name }}:latest
+
+      - name: Tag and push version tag
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          VERSION=$(echo $GITHUB_REF | sed -e 's|refs/tags/v||')
+          docker tag ${{ steps.get_image.outputs.image_name }}:${{ steps.get_image.outputs.staging_tag }} ${{ steps.get_image.outputs.image_name }}:$VERSION
+          docker push ${{ steps.get_image.outputs.image_name }}:$VERSION
