@@ -20,8 +20,13 @@ RUN apt-get update && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
+# 确保临时目录有正确的权限
+RUN mkdir -p /tmp && chmod 777 /tmp
+
 # 在线安装 TinyTeX、LaTeX 扩展包并进行极限压缩
 RUN wget -q -O /tmp/install-tinytex.sh https://yihui.org/tinytex/install-bin-unix.sh && \
+    # 创建安装目录并确保权限
+    mkdir -p /root/.TinyTeX && chmod 755 /root/.TinyTeX && \
     # 执行安装脚本，它会自动下载 TinyTeX
     sh /tmp/install-tinytex.sh && \
     # 安装完成后立即删除安装脚本

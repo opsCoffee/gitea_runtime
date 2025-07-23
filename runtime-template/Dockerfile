@@ -13,10 +13,18 @@ RUN apk add --no-cache git
 # 设置工作目录
 WORKDIR /app
 
-# 一次性安装所有 Go 工具，减少层数
-RUN go install -v github.com/projectdiscovery/templates-stats@latest && \
-    go install -v github.com/projectdiscovery/nuclei/v3/cmd/nuclei@latest && \ 
-    go install -v github.com/projectdiscovery/nuclei/v3/cmd/generate-checksum@latest && \
+# 设置 GOPRIVATE 环境变量，跳过私有仓库的身份验证
+ENV GOPRIVATE=github.com/prologic/smtpd
+
+# 创建临时的 go.mod 文件
+RUN echo "module github.com/gitea/runtime-template" > go.mod && \
+    echo "go 1.22" >> go.mod
+
+# 一次性安装所有 Go 工具，使用固定版本避免依赖问题
+RUN go install -v github.com/projectdiscovery/nuclei/v3/cmd/nuclei@v3.1.8 && \ 
+    go install -v github.com/projectdiscovery/nuclei/v3/cmd/generate-checksum@v3.1.8 && \
+    # 尝试安装 templates-stats，如果失败则继续
+    go install -v github.com/projectdiscovery/templates-stats@v0.0.1 || true && \
     rm -rf /app
 
 # =================================================================
