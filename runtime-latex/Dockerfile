@@ -1,5 +1,9 @@
 # =================================================================
-# 第一阶段：在线构建一个精简的 TinyTeX 环境
+# Gitea Runtime: LaTeX 文档处理运行时
+# =================================================================
+
+# =================================================================
+# 第一阶段：构建精简的 TinyTeX 环境
 # =================================================================
 FROM debian:12-slim AS tex-builder
 
@@ -7,8 +11,7 @@ ENV DEBIAN_FRONTEND=noninteractive
 # 将 PATH 设置在顶部，确保后续所有 RUN 指令都能使用
 ENV PATH="/root/.TinyTeX/bin/x86_64-linux:$PATH"
 
-# Step 1: 安装系统级依赖
-# 在线安装不再需要 fontconfig 等构建时依赖
+# 安装系统级依赖
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
         wget \
@@ -17,8 +20,7 @@ RUN apt-get update && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
-# Step 2: 在线安装 TinyTeX、LaTeX 扩展包并进行极限压缩
-# 将所有下载、安装、配置和清理操作合并到单个 RUN 指令，以减小镜像层数
+# 在线安装 TinyTeX、LaTeX 扩展包并进行极限压缩
 RUN wget -q -O /tmp/install-tinytex.sh https://yihui.org/tinytex/install-bin-unix.sh && \
     # 执行安装脚本，它会自动下载 TinyTeX
     sh /tmp/install-tinytex.sh && \
@@ -43,7 +45,6 @@ RUN wget -q -O /tmp/install-tinytex.sh https://yihui.org/tinytex/install-bin-uni
     # 移除 tlmgr 的路径缓存，进一步减小体积
     tlmgr path remove
 
-
 # =================================================================
 # 第二阶段：构建最终的 Node.js + TeX 运行时镜像
 # =================================================================
@@ -51,7 +52,10 @@ FROM node:20-bookworm-slim
 
 # 使用 OCI 标准标签
 LABEL org.opencontainers.image.authors="kenyon <kenyon@noreply.localhost>" \
-      org.opencontainers.image.description="A lean runtime image with Node.js 20 and a compressed TinyTeX environment."
+      org.opencontainers.image.description="A lean runtime image with Node.js 20 and a compressed TinyTeX environment" \
+      org.opencontainers.image.source="https://git.httpx.online/kenyon/gitea-runtime" \
+      org.opencontainers.image.vendor="Gitea Runtime Project" \
+      org.opencontainers.image.licenses="MIT"
 
 ENV DEBIAN_FRONTEND=noninteractive
 
@@ -67,13 +71,19 @@ COPY --from=tex-builder /root/.TinyTeX /usr/local/TinyTeX
 
 # 设置环境变量，让系统能找到 TeX 程序
 ENV PATH="/usr/local/TinyTeX/bin/x86_64-linux:$PATH"
-WORKDIR /workdir
 
-# 修正：仅修改工作目录的所有权，遵循最小权限原则
-RUN chown -R node:node /workdir
+# 创建工作目录
+WORKDIR /app
+
+# 修改工作目录的所有权，遵循最小权限原则
+RUN chown -R node:node /app
 
 # 切换到非 root 用户，增强安全性
 USER node
 
-# 默认命令，检查 xelatex 是否安装成功
+# 添加健康检查
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+  CMD xelatex --version || exit 1
+
+# 设置默认命令
 CMD ["xelatex", "--version"]

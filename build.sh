@@ -29,7 +29,7 @@ show_help() {
     echo "  --no-push           不推送镜像到注册表"
     echo "  --no-save           不保存镜像为 tar 文件"
     echo "  --no-test           不测试镜像"
-    echo "  --only NAME         仅构建指定的镜像 (可选值: markdown, asustor, template)"
+    echo "  --only NAME         仅构建指定的镜像 (可选值: markdown, asustor, template, latex)"
     echo ""
     echo "示例:"
     echo "  $0 --no-push --no-save"
@@ -164,9 +164,10 @@ main() {
     
     # 定义镜像细节
     declare -A image_map
-    image_map["markdown"]="alpine_runtime:v0.2:markdown_format_runtime/Dockerfile"
-    image_map["asustor"]="asustor_runtime:v0.1:asustor_runtime/Dockerfile"
-    image_map["template"]="template_run:v0.1:template_runtime/Dockerfile"
+    image_map["markdown"]="gitea-runtime-markdown:latest:runtime-markdown/Dockerfile"
+    image_map["asustor"]="gitea-runtime-asustor:latest:runtime-asustor/Dockerfile"
+    image_map["template"]="gitea-runtime-template:latest:runtime-template/Dockerfile"
+    image_map["latex"]="gitea-runtime-latex:latest:runtime-latex/Dockerfile"
     
     # 处理镜像
     if [ -n "$ONLY_IMAGE" ]; then

@@ -1,5 +1,10 @@
-# 第一阶段：构建
-# 使用具体版本的官方基础镜像，确保一致性和可重现性
+# =================================================================
+# Gitea Runtime: 安全模板处理运行时
+# =================================================================
+
+# =================================================================
+# 第一阶段：构建阶段
+# =================================================================
 FROM golang:1.22-alpine AS builder
 
 # 安装依赖
@@ -14,13 +19,17 @@ RUN go install -v github.com/projectdiscovery/templates-stats@latest && \
     go install -v github.com/projectdiscovery/nuclei/v3/cmd/generate-checksum@latest && \
     rm -rf /app
 
-# 第二阶段：创建运行时镜像
+# =================================================================
+# 第二阶段：运行时阶段
+# =================================================================
 FROM node:22-alpine
 
 # 使用 OCI 标准标签
 LABEL org.opencontainers.image.authors="kenyon <kenyon@noreply.localhost>" \
       org.opencontainers.image.description="A template processing environment with Nuclei and Node.js" \
-      org.opencontainers.image.source="https://git.httpx.online/kenyon/gitea-runtime"
+      org.opencontainers.image.source="https://git.httpx.online/kenyon/gitea-runtime" \
+      org.opencontainers.image.vendor="Gitea Runtime Project" \
+      org.opencontainers.image.licenses="MIT"
 
 # 设置环境变量
 ENV LANG=en_US.UTF-8 \

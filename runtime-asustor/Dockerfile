@@ -1,9 +1,15 @@
+# =================================================================
+# Gitea Runtime: ASUSTOR 应用运行时
+# =================================================================
+
 FROM alpine:3.20
 
 # 使用 OCI 标准标签
 LABEL org.opencontainers.image.authors="kenyon <kenyon@noreply.localhost>" \
       org.opencontainers.image.description="A lightweight runtime environment for ASUSTOR applications" \
-      org.opencontainers.image.source="https://git.httpx.online/kenyon/gitea-runtime"
+      org.opencontainers.image.source="https://git.httpx.online/kenyon/gitea-runtime" \
+      org.opencontainers.image.vendor="Gitea Runtime Project" \
+      org.opencontainers.image.licenses="MIT"
 
 # 设置环境变量
 ENV LANG=en_US.UTF-8 \
@@ -29,4 +35,4 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
   CMD python3 -c "import sys; sys.exit(0)" || exit 1
 
 # 设置默认命令
-CMD [ "sh" ]
+CMD ["sh"]

@@ -2,10 +2,10 @@ name: Build Docker Images
 
 on:
   push:
-    branches: [ main ]
+    branches: [ master ]
     tags: [ 'v*' ]
   pull_request:
-    branches: [ main ]
+    branches: [ master ]
 
 jobs:
   build:
@@ -38,11 +38,25 @@ jobs:
       - name: Build and test template runtime
         run: |
           ./build.sh --only template --no-save
+          
+      - name: Build and test latex runtime
+        run: |
+          ./build.sh --only latex --no-save
       
-      - name: Run security scan
+      - name: Run security scan for markdown runtime
         uses: aquasecurity/trivy-action@master
         with:
-          image-ref: 'git.httpx.online/kenyon/alpine_runtime:v0.2'
+          image-ref: 'git.httpx.online/kenyon/gitea-runtime-markdown:latest'
+          format: 'table'
+          exit-code: '1'
+          ignore-unfixed: true
+          vuln-type: 'os,library'
+          severity: 'CRITICAL,HIGH'
+          
+      - name: Run security scan for template runtime
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: 'git.httpx.online/kenyon/gitea-runtime-template:latest'
           format: 'table'
           exit-code: '1'
           ignore-unfixed: true

@@ -23,41 +23,63 @@ run_test() {
   fi
 }
 
-# 测试 markdown_format_runtime
+# 测试 Markdown 运行时
 test_markdown_runtime() {
-  echo -e "\n📋 测试 markdown_format_runtime 镜像"
+  echo -e "\n📋 测试 Markdown 运行时镜像"
   
-  run_test "markdownlint-cli2 版本检查" "docker run --rm alpine_runtime:v0.2 markdownlint-cli2 --version"
-  run_test "Node.js 版本检查" "docker run --rm alpine_runtime:v0.2 node --version"
-  run_test "Python 版本检查" "docker run --rm alpine_runtime:v0.2 python --version"
+  run_test "markdownlint-cli2 版本检查" "docker run --rm gitea-runtime-markdown:latest markdownlint-cli2 --version"
+  run_test "Node.js 版本检查" "docker run --rm gitea-runtime-markdown:latest node --version"
+  run_test "Python 版本检查" "docker run --rm gitea-runtime-markdown:latest python --version"
   
   # 创建测试 Markdown 文件
   echo "# Test Markdown\n\nThis is a test." > /tmp/test.md
   
   # 测试 Markdown 格式化功能
-  run_test "Markdown 格式检查" "docker run --rm -v /tmp/test.md:/app/test.md alpine_runtime:v0.2 markdownlint-cli2 /app/test.md"
+  run_test "Markdown 格式检查" "docker run --rm -v /tmp/test.md:/app/test.md gitea-runtime-markdown:latest markdownlint-cli2 /app/test.md"
   
   # 清理
   rm -f /tmp/test.md
 }
 
-# 测试 asustor_runtime
+# 测试 ASUSTOR 运行时
 test_asustor_runtime() {
-  echo -e "\n📋 测试 asustor_runtime 镜像"
+  echo -e "\n📋 测试 ASUSTOR 运行时镜像"
   
-  run_test "Python 版本检查" "docker run --rm asustor_runtime:v0.1 python3 --version"
-  run_test "Node.js 版本检查" "docker run --rm asustor_runtime:v0.1 node --version"
-  run_test "npm 版本检查" "docker run --rm asustor_runtime:v0.1 npm --version"
-  run_test "git 版本检查" "docker run --rm asustor_runtime:v0.1 git --version"
+  run_test "Python 版本检查" "docker run --rm gitea-runtime-asustor:latest python3 --version"
+  run_test "Node.js 版本检查" "docker run --rm gitea-runtime-asustor:latest node --version"
+  run_test "npm 版本检查" "docker run --rm gitea-runtime-asustor:latest npm --version"
+  run_test "git 版本检查" "docker run --rm gitea-runtime-asustor:latest git --version"
 }
 
-# 测试 template_runtime
+# 测试模板处理运行时
 test_template_runtime() {
-  echo -e "\n📋 测试 template_runtime 镜像"
+  echo -e "\n📋 测试模板处理运行时镜像"
   
-  run_test "Nuclei 版本检查" "docker run --rm template_run:v0.1 nuclei -version"
-  run_test "Node.js 版本检查" "docker run --rm template_run:v0.1 node --version"
-  run_test "Python 版本检查" "docker run --rm template_run:v0.1 python3 --version"
+  run_test "Nuclei 版本检查" "docker run --rm gitea-runtime-template:latest nuclei -version"
+  run_test "Node.js 版本检查" "docker run --rm gitea-runtime-template:latest node --version"
+  run_test "Python 版本检查" "docker run --rm gitea-runtime-template:latest python3 --version"
+}
+
+# 测试 LaTeX 运行时
+test_latex_runtime() {
+  echo -e "\n📋 测试 LaTeX 运行时镜像"
+  
+  run_test "xelatex 版本检查" "docker run --rm gitea-runtime-latex:latest xelatex --version"
+  run_test "Node.js 版本检查" "docker run --rm gitea-runtime-latex:latest node --version"
+  
+  # 创建测试 LaTeX 文件
+  cat > /tmp/test.tex << EOF
+\\documentclass{article}
+\\begin{document}
+Hello, World!
+\\end{document}
+EOF
+  
+  # 测试 LaTeX 编译功能
+  run_test "LaTeX 编译测试" "docker run --rm -v /tmp/test.tex:/app/test.tex gitea-runtime-latex:latest xelatex -interaction=nonstopmode /app/test.tex"
+  
+  # 清理
+  rm -f /tmp/test.tex
 }
 
 # 主函数
@@ -71,10 +93,13 @@ main() {
     test_asustor_runtime
   elif [ "$1" == "template" ]; then
     test_template_runtime
+  elif [ "$1" == "latex" ]; then
+    test_latex_runtime
   else
     test_markdown_runtime
     test_asustor_runtime
     test_template_runtime
+    test_latex_runtime
   fi
   
   echo -e "\n✨ 测试完成"

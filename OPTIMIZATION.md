@@ -1,6 +1,39 @@
 # Gitea Runtime 项目优化记录
 
-## 已实施的优化
+## 最新优化（2025/7/23）
+
+### 1. 项目结构统一
+
+- 重命名运行时目录，采用统一的命名格式：
+  - `markdown_format_runtime` → `runtime-markdown`
+  - `asustor_runtime` → `runtime-asustor`
+  - `template_runtime` → `runtime-template`
+  - `latex_runtime` → `runtime-latex`
+
+### 2. 文档标准化
+
+- 统一所有 README.md 文件的格式和内容结构
+- 更新主 README.md，提供完整的项目概述和使用指南
+- 为所有运行时环境添加详细的使用示例
+
+### 3. Dockerfile 风格统一
+
+- 统一所有 Dockerfile 的注释和结构
+- 添加统一的 OCI 标准标签
+- 统一健康检查配置
+- 统一用户权限管理
+
+### 4. 镜像命名规范化
+
+- 采用统一的镜像命名格式：`gitea-runtime-<type>:latest`
+- 更新构建脚本和测试脚本以适应新的命名规则
+
+### 5. CI/CD 增强
+
+- 更新 Gitea Actions 工作流，支持所有运行时环境
+- 为每个主要镜像添加安全扫描
+
+## 之前实施的优化
 
 ### 1. Dockerfile 优化
 

@@ -1,5 +1,4 @@
-
-# ASUSTOR 运行时环境
+# ASUSTOR 应用运行时
 
 ## 概述
 
@@ -19,7 +18,7 @@
 使用以下命令构建镜像：
 
 ```bash
-docker buildx build -t asustor_runtime:v0.1 -f asustor_runtime/Dockerfile .
+docker buildx build -t gitea-runtime-asustor:latest -f runtime-asustor/Dockerfile .
 ```
 
 或者使用项目根目录的 `build.sh` 脚本：
@@ -33,25 +32,25 @@ docker buildx build -t asustor_runtime:v0.1 -f asustor_runtime/Dockerfile .
 ### 基本用法
 
 ```bash
-docker run --rm asustor_runtime:v0.1 python3 --version
+docker run --rm gitea-runtime-asustor:latest python3 --version
 ```
 
 ### 运行 Python 脚本
 
 ```bash
-docker run --rm -v $(pwd):/app asustor_runtime:v0.1 python3 /app/script.py
+docker run --rm -v $(pwd):/app gitea-runtime-asustor:latest python3 /app/script.py
 ```
 
 ### 运行 Node.js 应用
 
 ```bash
-docker run --rm -v $(pwd):/app asustor_runtime:v0.1 node /app/index.js
+docker run --rm -v $(pwd):/app gitea-runtime-asustor:latest node /app/index.js
 ```
 
 ### 交互式 Shell
 
 ```bash
-docker run -it --rm asustor_runtime:v0.1
+docker run -it --rm gitea-runtime-asustor:latest
 ```
 
 ## 在 Gitea Actions 中使用
@@ -69,7 +68,7 @@ jobs:
   test:
     runs-on: ubuntu-latest
     container:
-      image: git.httpx.online/kenyon/asustor_runtime:v0.1
+      image: git.httpx.online/kenyon/gitea-runtime-asustor:latest
     
     steps:
       - uses: actions/checkout@v4

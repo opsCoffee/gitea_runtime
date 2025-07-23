@@ -19,7 +19,7 @@
 使用以下命令构建镜像：
 
 ```bash
-docker buildx build -t alpine_runtime:v0.2 -f markdown_format_runtime/Dockerfile .
+docker buildx build -t gitea-runtime-markdown:latest -f runtime-markdown/Dockerfile .
 ```
 
 或者使用项目根目录的 `build.sh` 脚本：
@@ -33,19 +33,19 @@ docker buildx build -t alpine_runtime:v0.2 -f markdown_format_runtime/Dockerfile
 ### 基本用法
 
 ```bash
-docker run --rm alpine_runtime:v0.2 markdownlint-cli2 --version
+docker run --rm gitea-runtime-markdown:latest markdownlint-cli2 --version
 ```
 
 ### 检查 Markdown 文件
 
 ```bash
-docker run --rm -v $(pwd):/app alpine_runtime:v0.2 markdownlint-cli2 /app/README.md
+docker run --rm -v $(pwd):/app gitea-runtime-markdown:latest markdownlint-cli2 /app/README.md
 ```
 
 ### 格式化 Markdown 文件
 
 ```bash
-docker run --rm -v $(pwd):/app alpine_runtime:v0.2 markdownlint-cli2 --fix /app/README.md
+docker run --rm -v $(pwd):/app gitea-runtime-markdown:latest markdownlint-cli2 --fix /app/README.md
 ```
 
 ## 在 Gitea Actions 中使用
@@ -63,7 +63,7 @@ jobs:
   lint:
     runs-on: ubuntu-latest
     container:
-      image: git.httpx.online/kenyon/alpine_runtime:v0.2
+      image: git.httpx.online/kenyon/gitea-runtime-markdown:latest
     
     steps:
       - uses: actions/checkout@v4

@@ -1,4 +1,10 @@
+# =================================================================
+# Gitea Runtime: Markdown 格式化运行时
+# =================================================================
+
+# =================================================================
 # 第一阶段：构建阶段
+# =================================================================
 FROM node:lts-alpine3.20 AS builder
 
 # 设置环境变量
@@ -9,16 +15,20 @@ RUN apk add --no-cache bash curl git python3 && \
     ln -sf python3 /usr/bin/python && \
     npm install -g markdownlint-cli2
 
+# =================================================================
 # 第二阶段：运行时阶段
+# =================================================================
 FROM node:lts-alpine3.20
-
-# 设置环境变量
-ENV LANG=en_US.utf8
 
 # 使用 OCI 标准标签
 LABEL org.opencontainers.image.authors="kenyon <kenyon@noreply.localhost>" \
       org.opencontainers.image.description="A lightweight Markdown linting and formatting environment for Gitea Runner" \
-      org.opencontainers.image.source="https://git.httpx.online/kenyon/gitea-runtime"
+      org.opencontainers.image.source="https://git.httpx.online/kenyon/gitea-runtime" \
+      org.opencontainers.image.vendor="Gitea Runtime Project" \
+      org.opencontainers.image.licenses="MIT"
+
+# 设置环境变量
+ENV LANG=en_US.utf8
 
 # 安装运行时必要的工具，并清理缓存
 RUN apk add --no-cache bash curl git python3 vim dos2unix perl && \

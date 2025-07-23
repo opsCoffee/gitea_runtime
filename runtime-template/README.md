@@ -1,4 +1,4 @@
-# 模板处理运行时环境
+# 安全模板处理运行时
 
 ## 概述
 
@@ -18,7 +18,7 @@
 使用以下命令构建镜像：
 
 ```bash
-docker buildx build -t template_run:v0.1 -f template_runtime/Dockerfile .
+docker buildx build -t gitea-runtime-template:latest -f runtime-template/Dockerfile .
 ```
 
 或者使用项目根目录的 `build.sh` 脚本：
@@ -32,31 +32,31 @@ docker buildx build -t template_run:v0.1 -f template_runtime/Dockerfile .
 ### 基本用法
 
 ```bash
-docker run --rm template_run:v0.1 nuclei -version
+docker run --rm gitea-runtime-template:latest nuclei -version
 ```
 
 ### 运行 Nuclei 扫描
 
 ```bash
-docker run --rm -v $(pwd):/app template_run:v0.1 nuclei -t /app/templates -u https://example.com
+docker run --rm -v $(pwd):/app gitea-runtime-template:latest nuclei -t /app/templates -u https://example.com
 ```
 
 ### 生成模板校验和
 
 ```bash
-docker run --rm -v $(pwd):/app template_run:v0.1 generate-checksum -d /app/templates
+docker run --rm -v $(pwd):/app gitea-runtime-template:latest generate-checksum -d /app/templates
 ```
 
 ### 获取模板统计信息
 
 ```bash
-docker run --rm -v $(pwd):/app template_run:v0.1 templates-stats -d /app/templates
+docker run --rm -v $(pwd):/app gitea-runtime-template:latest templates-stats -d /app/templates
 ```
 
 ### 交互式 Shell
 
 ```bash
-docker run -it --rm template_run:v0.1
+docker run -it --rm gitea-runtime-template:latest
 ```
 
 ## 在 Gitea Actions 中使用
@@ -74,7 +74,7 @@ jobs:
   validate:
     runs-on: ubuntu-latest
     container:
-      image: git.httpx.online/kenyon/template_run:v0.1
+      image: git.httpx.online/kenyon/gitea-runtime-template:latest
     
     steps:
       - uses: actions/checkout@v4
