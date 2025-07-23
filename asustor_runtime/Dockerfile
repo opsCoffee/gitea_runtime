@@ -1,13 +1,14 @@
-FROM node:lts-alpine
+FROM alpine:3.20
 
-# 设置环境变量
 ENV LANG=en_US.UTF-8 \
     PYTHONUNBUFFERED=1
 
-# 安装 Python 和 Git
-RUN apk add --no-cache python3 git && \
-    ln -sf python3 /usr/bin/python && \
-    node -v && \
-    npm -v && \
-    python --version && \
-    git --version
+RUN apk add --no-cache \
+    python3 \
+    nodejs \
+    npm \
+    git
+
+WORKDIR /app
+
+CMD [ "sh" ]
