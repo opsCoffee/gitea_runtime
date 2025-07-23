@@ -95,7 +95,8 @@ handle_docker_image() {
     
     # 添加版本信息
     VERSION=$(git describe --tags --always 2>/dev/null || echo "dev")
-    BUILD_DATE=$(date -u +'%Y-%m-%dT%H:%M:%SZ')
+    BUILD_DATE=$(date -u +'%Y-%m-%d')
+    DATE_TAG="v$(date -u +'%Y%m%d')"
     
     # 设置构建参数
     if [ "$USE_CACHE" = true ]; then
@@ -110,8 +111,10 @@ handle_docker_image() {
         --build-arg VERSION=${VERSION} \
         --build-arg BUILD_DATE=${BUILD_DATE} \
         -t ${image_name}:${image_tag} \
+        -t ${image_name}:${DATE_TAG} \
         -t ${REGISTRY}/${image_name}:${image_tag} \
         -t ${REGISTRY}/${image_name}:latest \
+        -t ${REGISTRY}/${image_name}:${DATE_TAG} \
         -f ${dockerfile_path} .
     
     # 如果启用了缓存，则更新缓存
@@ -127,6 +130,8 @@ handle_docker_image() {
         echo -e "${YELLOW}📤 推送镜像到注册表...${NC}"
         docker push ${REGISTRY}/${image_name}:${image_tag}
         docker push ${REGISTRY}/${image_name}:latest
+        docker push ${REGISTRY}/${image_name}:${DATE_TAG}
+        echo -e "${GREEN}✅ 镜像已推送: ${REGISTRY}/${image_name}:latest, ${REGISTRY}/${image_name}:${DATE_TAG}${NC}"
     fi
     
     echo -e "${GREEN}✅ 镜像 ${image_name}:${image_tag} 构建完成${NC}"
@@ -183,7 +188,7 @@ main() {
             # 如果启用了测试，则测试镜像
             if [ "$TEST_IMAGES" = true ]; then
                 chmod +x ./test_images.sh
-                ./test_images.sh $ONLY_IMAGE
+                ./test_images.sh $ONLY_IMAGE --registry $REGISTRY
             fi
         else
             echo -e "${RED}❌ 未知镜像: ${ONLY_IMAGE}${NC}"
@@ -204,7 +209,7 @@ main() {
         # 如果启用了测试，则测试所有镜像
         if [ "$TEST_IMAGES" = true ]; then
             chmod +x ./test_images.sh
-            ./test_images.sh
+            ./test_images.sh --registry $REGISTRY
         fi
     fi
     
