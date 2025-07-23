@@ -34,6 +34,37 @@
 ./build.sh --only latex     # 构建 LaTeX 运行时
 ```
 
+### 测试镜像
+
+```bash
+./test_images.sh                    # 测试所有镜像
+./test_images.sh markdown          # 测试特定镜像
+./test_images.sh --date-tag latex  # 使用日期标签测试
+```
+
+### 性能监控
+
+```bash
+./performance_monitor.sh            # 完整性能分析
+./performance_monitor.sh --analyze-only  # 仅分析现有镜像
+```
+
+### 安全扫描
+
+```bash
+./security_scanner.sh               # 全面安全扫描
+./security_scanner.sh --only markdown  # 扫描特定镜像
+./security_scanner.sh --baseline   # 生成安全基线
+```
+
+### 自动优化
+
+```bash
+./auto_optimizer.sh --dry-run       # 预览优化建议
+./auto_optimizer.sh --backup        # 优化前创建备份
+./auto_optimizer.sh --aggressive    # 激进优化模式
+```
+
 ### 构建选项
 
 ```bash

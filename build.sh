@@ -105,32 +105,57 @@ handle_docker_image() {
         build_args="--no-cache"
     fi
     
-    # 构建镜像
-    docker buildx build $build_args \
-        --platform ${PLATFORMS} \
+    # 构建镜像 - 优化的并行构建策略
+    local current_platform=$(docker info -f '{{.Architecture}}')
+    local build_context_hash=$(find . -name "Dockerfile" -o -name "*.sh" -o -name "*.json" | xargs md5sum | md5sum | cut -d' ' -f1)
+    
+    # 检查是否需要重新构建（基于内容哈希）
+    if docker image inspect ${image_name}:${image_tag} &>/dev/null; then
+        local existing_hash=$(docker image inspect ${image_name}:${image_tag} --format '{{.Config.Labels.build_hash}}' 2>/dev/null || echo "")
+        if [ "$existing_hash" = "$build_context_hash" ]; then
+            echo -e "${YELLOW}⚡ 镜像 ${image_name}:${image_tag} 已是最新，跳过构建${NC}"
+            return 0
+        fi
+    fi
+    
+    # 优化的构建参数
+    local optimized_build_args="$build_args --build-arg BUILDKIT_INLINE_CACHE=1"
+    
+    # 如果启用了推送，则构建多平台镜像并推送
+    if [ "$PUSH_IMAGES" = true ]; then
+        echo -e "${BLUE}🌐 构建多平台镜像并推送...${NC}"
+        docker buildx build $optimized_build_args \
+            --platform ${PLATFORMS} \
+            --build-arg VERSION=${VERSION} \
+            --build-arg BUILD_DATE=${BUILD_DATE} \
+            --build-arg BUILD_HASH=${build_context_hash} \
+            --label build_hash=${build_context_hash} \
+            --cache-to type=registry,ref=${REGISTRY}/${image_name}:cache,mode=max \
+            -t ${REGISTRY}/${image_name}:${image_tag} \
+            -t ${REGISTRY}/${image_name}:latest \
+            -t ${REGISTRY}/${image_name}:${DATE_TAG} \
+            -f ${dockerfile_path} . --push
+    fi
+    
+    # 为当前平台构建并加载到本地（用于测试和扫描）
+    echo -e "${BLUE}💻 构建本地镜像...${NC}"
+    docker buildx build $optimized_build_args \
+        --platform linux/${current_platform} \
         --build-arg VERSION=${VERSION} \
         --build-arg BUILD_DATE=${BUILD_DATE} \
+        --build-arg BUILD_HASH=${build_context_hash} \
+        --label build_hash=${build_context_hash} \
         -t ${image_name}:${image_tag} \
         -t ${image_name}:${DATE_TAG} \
         -t ${REGISTRY}/${image_name}:${image_tag} \
         -t ${REGISTRY}/${image_name}:latest \
         -t ${REGISTRY}/${image_name}:${DATE_TAG} \
-        -f ${dockerfile_path} .
+        -f ${dockerfile_path} . --load
     
-    # 如果启用了缓存，则更新缓存
-    if [ "$USE_CACHE" = true ]; then
-        echo -e "${YELLOW}📦 更新缓存...${NC}"
-        docker buildx build --cache-to type=registry,ref=${REGISTRY}/${image_name}:cache,mode=max \
-            -t ${REGISTRY}/${image_name}:cache \
-            -f ${dockerfile_path} . --push
-    fi
+    # 缓存已在构建步骤中处理，无需额外操作
     
-    # 如果启用了推送，则推送镜像
+    # 如果启用了推送，镜像已经在构建步骤中推送
     if [ "$PUSH_IMAGES" = true ]; then
-        echo -e "${YELLOW}📤 推送镜像到注册表...${NC}"
-        docker push ${REGISTRY}/${image_name}:${image_tag}
-        docker push ${REGISTRY}/${image_name}:latest
-        docker push ${REGISTRY}/${image_name}:${DATE_TAG}
         echo -e "${GREEN}✅ 镜像已推送: ${REGISTRY}/${image_name}:latest, ${REGISTRY}/${image_name}:${DATE_TAG}${NC}"
     fi
     

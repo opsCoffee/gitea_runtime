@@ -2,63 +2,183 @@ name: Build Docker Images
 
 on:
   push:
-    branches: [ master ]
+    branches: [ master, main ]
     tags: [ 'v*' ]
   pull_request:
-    branches: [ master ]
+    branches: [ master, main ]
+  schedule:
+    - cron: '0 2 * * 1'  # 每周一凌晨2点运行，确保依赖更新
+
+env:
+  REGISTRY: git.httpx.online
+  REGISTRY_NAMESPACE: kenyon
 
 jobs:
-  build:
+  # 检测变更的运行时
+  detect-changes:
     runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.changes.outputs.matrix }}
+      any-changed: ${{ steps.changes.outputs.any-changed }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0  # 获取完整历史以便正确生成版本号
+          fetch-depth: 0
+      
+      - name: Detect changes
+        id: changes
+        run: |
+          # 检测哪些运行时发生了变更
+          changed_runtimes=()
+          
+          if [ "${{ github.event_name }}" = "schedule" ] || [ "${{ github.ref_type }}" = "tag" ]; then
+            # 定时构建或标签推送时构建所有镜像
+            changed_runtimes=("markdown" "asustor" "template" "latex")
+          else
+            # 检测文件变更
+            if git diff --name-only HEAD~1 HEAD | grep -E "(build\.sh|test_images\.sh|\.github/workflows|runtime-markdown)" > /dev/null; then
+              changed_runtimes+=("markdown")
+            fi
+            if git diff --name-only HEAD~1 HEAD | grep -E "(build\.sh|test_images\.sh|\.github/workflows|runtime-asustor)" > /dev/null; then
+              changed_runtimes+=("asustor")
+            fi
+            if git diff --name-only HEAD~1 HEAD | grep -E "(build\.sh|test_images\.sh|\.github/workflows|runtime-template)" > /dev/null; then
+              changed_runtimes+=("template")
+            fi
+            if git diff --name-only HEAD~1 HEAD | grep -E "(build\.sh|test_images\.sh|\.github/workflows|runtime-latex)" > /dev/null; then
+              changed_runtimes+=("latex")
+            fi
+          fi
+          
+          # 如果没有检测到变更，至少构建一个镜像用于测试
+          if [ ${#changed_runtimes[@]} -eq 0 ]; then
+            changed_runtimes=("markdown")
+          fi
+          
+          # 生成矩阵
+          matrix_json=$(printf '%s\n' "${changed_runtimes[@]}" | jq -R . | jq -s .)
+          echo "matrix={\"runtime\":$matrix_json}" >> $GITHUB_OUTPUT
+          echo "any-changed=true" >> $GITHUB_OUTPUT
+          
+          echo "检测到变更的运行时: ${changed_runtimes[*]}"
+
+  # 并行构建和测试
+  build-and-test:
+    needs: detect-changes
+    if: needs.detect-changes.outputs.any-changed == 'true'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(needs.detect-changes.outputs.matrix) }}
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
+        with:
+          driver-opts: |
+            network=host
       
       - name: Login to Docker Registry
         uses: docker/login-action@v3
         with:
-          registry: git.httpx.online
+          registry: ${{ env.REGISTRY }}
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
       
-      - name: Build and test markdown runtime
+      - name: Build and test ${{ matrix.runtime }} runtime
         run: |
-          chmod +x ./build.sh
-          ./build.sh --only markdown --no-save
+          chmod +x ./build.sh ./test_images.sh
+          ./build.sh --only ${{ matrix.runtime }} --no-save
       
-      - name: Build and test asustor runtime
+      - name: Verify image availability
         run: |
-          ./build.sh --only asustor --no-save
+          echo "检查本地镜像..."
+          docker images | grep gitea-runtime-${{ matrix.runtime }} || {
+            echo "镜像不存在，尝试从注册表拉取..."
+            docker pull ${{ env.REGISTRY }}/${{ env.REGISTRY_NAMESPACE }}/gitea-runtime-${{ matrix.runtime }}:latest || exit 1
+            docker tag ${{ env.REGISTRY }}/${{ env.REGISTRY_NAMESPACE }}/gitea-runtime-${{ matrix.runtime }}:latest gitea-runtime-${{ matrix.runtime }}:latest
+          }
       
-      - name: Build and test template runtime
+      - name: Run comprehensive tests
         run: |
-          ./build.sh --only template --no-save
-          
-      - name: Build and test latex runtime
-        run: |
-          ./build.sh --only latex --no-save
+          ./test_images.sh ${{ matrix.runtime }} --registry ${{ env.REGISTRY }}/${{ env.REGISTRY_NAMESPACE }}
       
-      - name: Run security scan for markdown runtime
+      - name: Security scan with Trivy
         uses: aquasecurity/trivy-action@master
         with:
-          image-ref: 'git.httpx.online/kenyon/gitea-runtime-markdown:latest'
-          format: 'table'
-          exit-code: '1'
+          image-ref: 'gitea-runtime-${{ matrix.runtime }}:latest'
+          format: 'sarif'
+          output: 'trivy-results-${{ matrix.runtime }}.sarif'
+          severity: 'CRITICAL,HIGH,MEDIUM'
           ignore-unfixed: true
           vuln-type: 'os,library'
-          severity: 'CRITICAL,HIGH'
-          
-      - name: Run security scan for template runtime
-        uses: aquasecurity/trivy-action@master
+      
+      - name: Upload Trivy scan results
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
         with:
-          image-ref: 'git.httpx.online/kenyon/gitea-runtime-template:latest'
-          format: 'table'
-          exit-code: '1'
-          ignore-unfixed: true
-          vuln-type: 'os,library'
-          severity: 'CRITICAL,HIGH'
+          sarif_file: 'trivy-results-${{ matrix.runtime }}.sarif'
+          category: 'trivy-${{ matrix.runtime }}'
+      
+      - name: Generate security report
+        if: always()
+        run: |
+          echo "## 安全扫描报告 - ${{ matrix.runtime }}" >> security-report-${{ matrix.runtime }}.md
+          echo "### 扫描时间: $(date)" >> security-report-${{ matrix.runtime }}.md
+          echo "### 镜像: gitea-runtime-${{ matrix.runtime }}:latest" >> security-report-${{ matrix.runtime }}.md
+          echo "" >> security-report-${{ matrix.runtime }}.md
+          
+          # 运行 Trivy 生成表格格式报告
+          docker run --rm -v /var/run/docker.sock:/var/run/docker.sock \
+            -v $(pwd):/workspace aquasec/trivy:latest \
+            image --format table --severity CRITICAL,HIGH,MEDIUM \
+            gitea-runtime-${{ matrix.runtime }}:latest >> security-report-${{ matrix.runtime }}.md || true
+      
+      - name: Upload security report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: security-report-${{ matrix.runtime }}
+          path: security-report-${{ matrix.runtime }}.md
+          retention-days: 30
+
+  # 汇总报告
+  summary:
+    needs: [detect-changes, build-and-test]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download all security reports
+        uses: actions/download-artifact@v4
+        with:
+          pattern: security-report-*
+          merge-multiple: true
+      
+      - name: Generate summary report
+        run: |
+          echo "# Docker 镜像构建和安全扫描汇总报告" > summary-report.md
+          echo "构建时间: $(date)" >> summary-report.md
+          echo "触发事件: ${{ github.event_name }}" >> summary-report.md
+          echo "分支/标签: ${{ github.ref }}" >> summary-report.md
+          echo "" >> summary-report.md
+          
+          # 合并所有安全报告
+          for report in security-report-*.md; do
+            if [ -f "$report" ]; then
+              cat "$report" >> summary-report.md
+              echo "" >> summary-report.md
+            fi
+          done
+      
+      - name: Upload summary report
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-summary-report
+          path: summary-report.md
+          retention-days: 90
