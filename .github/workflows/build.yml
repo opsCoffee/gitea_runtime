@@ -104,7 +104,7 @@ jobs:
   push-release:
     needs: [build, test]
     runs-on: ubuntu-latest
-    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/tags/v')) && needs.test.result == 'success'
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master') && needs.test.result == 'success'
     strategy:
       matrix:
         runtime: [markdown, asustor, template, latex]
@@ -117,15 +117,17 @@ jobs:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
 
-      - name: Get commit SHA
-        id: get_sha
-        run: echo "sha=$(echo ${GITHUB_SHA::7})" >> $GITHUB_OUTPUT
+      - name: Get commit SHA and date
+        id: get_info
+        run: |
+          echo "sha=$(echo ${GITHUB_SHA::7})" >> $GITHUB_OUTPUT
+          echo "date=$(date +%Y%m%d)" >> $GITHUB_OUTPUT
 
       - name: Get image identifiers
         id: get_image
         run: |
           IMAGE_NAME="${{ env.REGISTRY }}/${{ env.REGISTRY_NAMESPACE }}/gitea-runtime-${{ matrix.runtime }}"
-          STAGING_TAG="${{ steps.get_sha.outputs.sha }}"
+          STAGING_TAG="${{ steps.get_info.outputs.sha }}"
           echo "image_name=$IMAGE_NAME" >> $GITHUB_OUTPUT
           echo "staging_tag=$STAGING_TAG" >> $GITHUB_OUTPUT
 
@@ -139,10 +141,9 @@ jobs:
           docker tag ${{ steps.get_image.outputs.image_name }}:${{ steps.get_image.outputs.staging_tag }} ${{ steps.get_image.outputs.image_name }}:latest
           docker push ${{ steps.get_image.outputs.image_name }}:latest
 
-      - name: Tag and push version tag
-        if: startsWith(github.ref, 'refs/tags/v')
+      - name: Tag and push date version
         timeout-minutes: 10
         run: |
-          VERSION=$(echo $GITHUB_REF | sed -e 's|refs/tags/v||')
-          docker tag ${{ steps.get_image.outputs.image_name }}:${{ steps.get_image.outputs.staging_tag }} ${{ steps.get_image.outputs.image_name }}:$VERSION
-          docker push ${{ steps.get_image.outputs.image_name }}:$VERSION
+          DATE_TAG="v${{ steps.get_info.outputs.date }}"
+          docker tag ${{ steps.get_image.outputs.image_name }}:${{ steps.get_image.outputs.staging_tag }} ${{ steps.get_image.outputs.image_name }}:$DATE_TAG
+          docker push ${{ steps.get_image.outputs.image_name }}:$DATE_TAG
