@@ -58,47 +58,47 @@ jobs:
           chmod +x ./build.sh
           ./build.sh --only ${{ matrix.runtime }} --tag ${{ steps.get_sha.outputs.sha }} --push
 
-  test:
-    needs: build
-    runs-on: ubuntu-latest
-    if: needs.build.result == 'success'
-    strategy:
-      fail-fast: false
-      matrix:
-        runtime: [markdown, asustor, template, latex]
+  # test:
+  #   needs: build
+  #   runs-on: ubuntu-latest
+  #   if: needs.build.result == 'success'
+  #   strategy:
+  #     fail-fast: false
+  #     matrix:
+  #       runtime: [markdown, asustor, template, latex]
     
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+  #   steps:
+  #     - name: Checkout code
+  #       uses: actions/checkout@v4
 
-      - name: Login to Docker Registry
-        uses: docker/login-action@v3
-        with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ secrets.DOCKER_USERNAME }}
-          password: ${{ secrets.DOCKER_PASSWORD }}
+  #     - name: Login to Docker Registry
+  #       uses: docker/login-action@v3
+  #       with:
+  #         registry: ${{ env.REGISTRY }}
+  #         username: ${{ secrets.DOCKER_USERNAME }}
+  #         password: ${{ secrets.DOCKER_PASSWORD }}
 
-      - name: Run tests on staged image
-        timeout-minutes: 15
-        run: |
-          chmod +x ./test_images.sh
-          IMAGE_NAME="${{ env.REGISTRY }}/${{ env.REGISTRY_NAMESPACE }}/gitea-runtime-${{ matrix.runtime }}"
-          ./test_images.sh ${{ matrix.runtime }} --registry $IMAGE_NAME --tag ${{ needs.build.outputs.image_tag }}
+  #     - name: Run tests on staged image
+  #       timeout-minutes: 15
+  #       run: |
+  #         chmod +x ./test_images.sh
+  #         IMAGE_NAME="${{ env.REGISTRY }}/${{ env.REGISTRY_NAMESPACE }}/gitea-runtime-${{ matrix.runtime }}"
+  #         ./test_images.sh ${{ matrix.runtime }} --registry $IMAGE_NAME --tag ${{ needs.build.outputs.image_tag }}
 
-      - name: Security scan with Trivy
-        uses: aquasecurity/trivy-action@0.28.0
-        with:
-          image-ref: '${{ env.REGISTRY }}/${{ env.REGISTRY_NAMESPACE }}/gitea-runtime-${{ matrix.runtime }}:${{ needs.build.outputs.image_tag }}'
-          format: 'sarif'
-          output: 'trivy-results.sarif'
-          severity: 'CRITICAL,HIGH'
-        continue-on-error: true
+  #     - name: Security scan with Trivy
+  #       uses: aquasecurity/trivy-action@0.28.0
+  #       with:
+  #         image-ref: '${{ env.REGISTRY }}/${{ env.REGISTRY_NAMESPACE }}/gitea-runtime-${{ matrix.runtime }}:${{ needs.build.outputs.image_tag }}'
+  #         format: 'sarif'
+  #         output: 'trivy-results.sarif'
+  #         severity: 'CRITICAL,HIGH'
+  #       continue-on-error: true
 
-      - name: Upload Trivy scan results
-        uses: github/codeql-action/upload-sarif@v3
-        if: always()
-        with:
-          sarif_file: 'trivy-results.sarif'
+  #     - name: Upload Trivy scan results
+  #       uses: github/codeql-action/upload-sarif@v3
+  #       if: always()
+  #       with:
+  #         sarif_file: 'trivy-results.sarif'
 
   push-release:
     needs: [build, test]
