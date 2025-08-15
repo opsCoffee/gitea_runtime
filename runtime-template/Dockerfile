@@ -13,6 +13,9 @@ ARG BUILD_DATE
 # =================================================================
 FROM golang:1.22-alpine AS builder
 
+# 重新声明构建参数（多阶段构建需要）
+ARG NUCLEI_VERSION=v3.1.8
+
 # 安装构建依赖
 RUN apk add --no-cache git ca-certificates
 
@@ -30,6 +33,11 @@ RUN go install -v github.com/projectdiscovery/nuclei/v3/cmd/nuclei@${NUCLEI_VERS
 # 第二阶段：运行时阶段
 # =================================================================
 FROM node:${NODE_VERSION}-alpine
+
+# 重新声明运行时需要的构建参数
+ARG NODE_VERSION=22.6.0
+ARG GITEA_VERSION=dev
+ARG BUILD_DATE
 
 # 使用 OCI 标准标签
 LABEL org.opencontainers.image.authors="kenyon <kenyon@noreply.localhost>" \
