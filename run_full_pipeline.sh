@@ -336,10 +336,20 @@ cleanup() {
     echo -e "\n${BLUE}🧹 清理临时文件...${NC}"
     
     # 清理 Docker 悬空镜像
-    docker images --filter "dangling=true" --format '{{.ID}}' | xargs -r docker rmi 2>/dev/null || true
+    echo "正在清理悬空镜像..."
+    if dangling_images=$(docker images --filter "dangling=true" --format '{{.ID}}' 2>/dev/null) && [ -n "$dangling_images" ]; then
+        echo "$dangling_images" | xargs -r docker rmi 2>/dev/null && echo "悬空镜像清理完成" || echo "部分悬空镜像清理失败"
+    else
+        echo "没有发现悬空镜像"
+    fi
     
     # 清理构建缓存
-    docker builder prune --force --filter until=24h 2>/dev/null || true
+    echo "正在清理构建缓存..."
+    if docker builder prune --force --filter until=24h 2>/dev/null; then
+        echo "构建缓存清理完成"
+    else
+        echo "构建缓存清理失败"
+    fi
     
     echo -e "${GREEN}✅ 清理完成${NC}"
 }

@@ -1,10 +1,81 @@
 # Gitea Runtime
 
+[![Version](https://img.shields.io/badge/version-1.0.0-blue.svg)](./VERSION)
+[![License](https://img.shields.io/badge/license-MIT-green.svg)](./LICENSE)
+[![Build Status](https://img.shields.io/badge/build-passing-brightgreen.svg)](./.github/workflows/build.yml)
+
 本项目提供了一系列用于构建 Gitea Runner 的 Docker 镜像的 Dockerfile 集合。通过自定义打包 Docker 镜像，可以预先完成运行环境的构建，从而显著减少 Gitea Runner 的执行时间。
 
-## 项目说明
+## 🚀 快速开始
+
+### 前置要求
+- Docker 20.10+
+- Docker Buildx（多架构构建）
+- Git
+
+### 5分钟快速体验
+
+1. **克隆项目**
+   ```bash
+   git clone https://github.com/your-org/gitea-runtime.git
+   cd gitea-runtime
+   ```
+
+2. **构建单个镜像**
+   ```bash
+   # 构建 Markdown 运行时
+   ./build.sh --only markdown
+   
+   # 测试镜像
+   ./test_images.sh markdown
+   ```
+
+3. **立即使用**
+   ```bash
+   # 检查 Markdown 文件
+   docker run --rm -v $(pwd):/app gitea-runtime-markdown:latest \
+     markdownlint-cli2 /app/README.md
+   ```
+
+### 完整构建流程
+
+```bash
+# 构建所有镜像
+./build.sh
+
+# 运行完整测试套件
+./run_full_pipeline.sh --quick
+
+# 查看构建结果
+docker images | grep gitea-runtime
+```
+
+## 📋 项目说明
 
 由于这些镜像将作为 Gitea Runner 的运行时环境，需确保与 `actions/checkout@v4` 等常用 Actions 的兼容性。因此，所有镜像均基于 Node.js 相关镜像构建，并在不影响功能的前提下，尽可能压缩了镜像体积。
+
+### 🏗️ 架构概览
+
+```
+┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
+│   开发者推送     │───▶│   CI/CD 构建    │───▶│   镜像仓库      │
+│                │    │                │    │                │
+│ • Git Push     │    │ • 自动构建      │    │ • 版本管理      │
+│ • Pull Request │    │ • 安全扫描      │    │ • 多架构支持    │
+│ • 定时更新      │    │ • 性能测试      │    │ • 标签管理      │
+└─────────────────┘    └─────────────────┘    └─────────────────┘
+                                │
+                                ▼
+                       ┌─────────────────┐
+                       │  Gitea Runner   │
+                       │                │
+                       │ • 快速启动      │
+                       │ • 预配置环境    │
+                       │ • 标准化工具    │
+                       └─────────────────┘
+```
+
+> 📖 详细架构文档请参考 [ARCHITECTURE.md](./ARCHITECTURE.md)
 
 ## 可用运行时环境
 

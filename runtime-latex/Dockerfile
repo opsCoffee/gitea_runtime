@@ -31,8 +31,7 @@ RUN wget -q -O /tmp/install-tinytex.sh https://yihui.org/tinytex/install-bin-uni
     sh /tmp/install-tinytex.sh && \
     # 安装完成后立即删除安装脚本
     rm /tmp/install-tinytex.sh && \
-    # 设置清华大学的 CTAN 镜像源并安装所需宏包
-    tlmgr option repository https://mirrors.tuna.tsinghua.edu.cn/CTAN/systems/texlive/tlnet && \
+    # 使用默认的 CTAN 镜像源并安装所需宏包
     tlmgr option -- autobackup 0 && \
     tlmgr install \
         enumitem \

@@ -203,7 +203,9 @@ analyze_image_layers() {
             # 分析大文件
             echo "### 大文件分析" >> "$report_file"
             echo '```' >> "$report_file"
-            docker run --rm "$image_name:latest" find / -type f -size +10M 2>/dev/null | head -10 >> "$report_file" || true
+            if ! docker run --rm "$image_name:latest" find / -type f -size +10M 2>/dev/null | head -10 >> "$report_file"; then
+                echo "无法分析大文件 - 镜像可能不存在或无法访问" >> "$report_file"
+            fi
             echo '```' >> "$report_file"
             echo "" >> "$report_file"
         fi

@@ -23,8 +23,6 @@ RUN echo "module github.com/gitea/runtime-template" > go.mod && \
 # 一次性安装所有 Go 工具，使用固定版本避免依赖问题
 RUN go install -v github.com/projectdiscovery/nuclei/v3/cmd/nuclei@v3.1.8 && \ 
     go install -v github.com/projectdiscovery/nuclei/v3/cmd/generate-checksum@v3.1.8 && \
-    # 尝试安装 templates-stats，如果失败则继续
-    go install -v github.com/projectdiscovery/templates-stats@v0.0.1 || true && \
     rm -rf /app
 
 # =================================================================
@@ -45,7 +43,7 @@ ENV LANG=en_US.UTF-8 \
     LC_ALL=en_US.UTF-8
 
 # 复制编译好的二进制文件到新镜像
-COPY --from=builder /go/bin/nuclei /go/bin/generate-checksum /go/bin/templates-stats /usr/local/bin/
+COPY --from=builder /go/bin/nuclei /go/bin/generate-checksum /usr/local/bin/
 
 # 安装运行时所需的依赖并清理缓存
 RUN apk add --no-cache dos2unix curl vim bash git python3 py3-pip tree && \
