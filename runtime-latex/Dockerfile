@@ -43,28 +43,39 @@ RUN apt-get update && \
 RUN mkdir -p /tmp && chmod 777 /tmp
 
 # 在线安装 TinyTeX、LaTeX 扩展包并进行极限压缩
-RUN . /tmp/arch.env && \
+RUN set -e && \
+    . /tmp/arch.env && \
     # 下载并验证 TinyTeX 安装脚本
+    echo "Downloading TinyTeX installation script..." && \
     wget -q -O /tmp/install-tinytex.sh https://yihui.org/tinytex/install-bin-unix.sh && \
     # 创建安装目录并确保权限
     mkdir -p /root/.TinyTeX && chmod 755 /root/.TinyTeX && \
     # 执行安装脚本，它会自动下载 TinyTeX
+    echo "Installing TinyTeX for architecture: ${TINYTEX_ARCH}" && \
     sh /tmp/install-tinytex.sh && \
     # 安装完成后立即删除安装脚本
     rm /tmp/install-tinytex.sh && \
     # 设置 PATH 环境变量
     export PATH="/root/.TinyTeX/bin/${TINYTEX_ARCH}:$PATH" && \
-    # 配置 tlmgr 并安装所需宏包
+    # 验证 TinyTeX 安装
+    echo "Verifying TinyTeX installation..." && \
+    tlmgr --version && \
+    # 配置 tlmgr（只使用支持的选项）
+    echo "Configuring tlmgr..." && \
     tlmgr option -- autobackup 0 && \
-    tlmgr option -- install-docfiles 0 && \
-    tlmgr option -- install-srcfiles 0 && \
+    # 显示当前配置以便调试
+    tlmgr option && \
     # 分批安装包，避免依赖冲突
+    echo "Installing LaTeX packages..." && \
     tlmgr install enumitem titlesec fontawesome5 parskip && \
     # 单独安装中文支持包
+    echo "Installing Chinese support packages..." && \
     tlmgr install ctex fandol && \
     # 更新格式文件
+    echo "Updating format files..." && \
     fmtutil-sys --all && \
     # 极限清理，移除所有不必要的文档、源文件和缓存
+    echo "Performing cleanup to reduce image size..." && \
     rm -rf /root/.TinyTeX/texmf-dist/doc \
            /root/.TinyTeX/texmf-dist/source \
            /root/.TinyTeX/tlpkg/backups \
@@ -72,7 +83,8 @@ RUN . /tmp/arch.env && \
            /root/.TinyTeX/install-tl.log \
            /tmp/* && \
     # 移除 tlmgr 的路径缓存，进一步减小体积
-    tlmgr path remove
+    tlmgr path remove && \
+    echo "TinyTeX installation and optimization completed successfully."
 
 # =================================================================
 # 第二阶段：构建最终的 Node.js + TeX 运行时镜像
