@@ -8,7 +8,7 @@
 
 - 基于 Node.js 22 Alpine 的轻量级镜像
 - 预装 Nuclei 安全扫描工具
-- 包含 templates-stats 和 generate-checksum 工具
+- 包含 generate-checksum 工具
 - 多阶段构建，优化镜像大小
 - 使用非 root 用户运行，增强安全性
 - 包含常用工具：bash、curl、git、python3、vim、dos2unix 等
@@ -47,10 +47,10 @@ docker run --rm -v $(pwd):/app gitea-runtime-template:latest nuclei -t /app/temp
 docker run --rm -v $(pwd):/app gitea-runtime-template:latest generate-checksum -d /app/templates
 ```
 
-### 获取模板统计信息
+### 运行自定义模板扫描
 
 ```bash
-docker run --rm -v $(pwd):/app gitea-runtime-template:latest templates-stats -d /app/templates
+docker run --rm -v $(pwd):/app gitea-runtime-template:latest nuclei -t /app/custom-templates -u https://example.com
 ```
 
 ### 交互式 Shell
@@ -82,7 +82,7 @@ jobs:
       - name: Validate templates
         run: |
           generate-checksum -d templates
-          templates-stats -d templates
+          nuclei -validate -t templates
 ```
 
 ## 环境变量
@@ -97,7 +97,6 @@ jobs:
 - Node.js 22
 - Nuclei
 - generate-checksum
-- templates-stats
 
 ### 辅助工具
 - Python 3

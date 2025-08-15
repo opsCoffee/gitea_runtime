@@ -11,6 +11,8 @@ REGISTRY="git.httpx.online/kenyon"
 PLATFORMS="linux/amd64"
 PUSH=false
 TAG="latest"
+NO_CACHE=false
+CLEAN_CACHE=false
 
 # 显示帮助信息
 show_help() {
@@ -23,6 +25,8 @@ show_help() {
     echo "  --only NAME         仅构建指定的镜像 (e.g., markdown)"
     echo "  --tag TAG           指定镜像的标签 (默认: latest)"
     echo "  --push              构建后推送到注册表"
+    echo "  --no-cache          禁用构建缓存"
+    echo "  --clean-cache       清理本地构建缓存"
     exit 0
 }
 
@@ -53,6 +57,14 @@ parse_args() {
                 PUSH=true
                 shift
                 ;;
+            --no-cache)
+                NO_CACHE=true
+                shift
+                ;;
+            --clean-cache)
+                CLEAN_CACHE=true
+                shift
+                ;;
             *)
                 echo "未知选项: $1"
                 show_help
@@ -70,16 +82,32 @@ build_and_push() {
     local version=$(git describe --tags --always 2>/dev/null || echo "dev")
 
     echo -e "\n${BLUE}🔨 构建镜像: ${full_image_name}:${TAG}${NC}"
+    
+    # 处理缓存清理
+    if [ "$CLEAN_CACHE" = true ]; then
+        echo -e "${BLUE}🧹 清理构建缓存...${NC}"
+        rm -rf /tmp/.buildx-cache
+    fi
+    
+    # 确保本地缓存目录存在
+    mkdir -p /tmp/.buildx-cache
 
     local build_command="docker buildx build \
         --platform \"$PLATFORMS\" \
         --tag \"$full_image_name:${TAG}\" \
         --build-arg \"GITEA_VERSION=$version\" \
         --build-arg \"BUILD_DATE=$(date -u +'%Y-%m-%dT%H:%M:%SZ')\" \
-        --cache-from \"type=registry,ref=$full_image_name:cache\" \
-        --cache-to \"type=registry,ref=$full_image_name:cache,mode=max\" \
         --progress=plain \
         \"$context_path\""
+    
+    # 根据选项添加缓存配置
+    if [ "$NO_CACHE" = false ]; then
+        build_command="$build_command \
+            --cache-from \"type=local,src=/tmp/.buildx-cache\" \
+            --cache-to \"type=local,dest=/tmp/.buildx-cache,mode=max\""
+    else
+        build_command="$build_command --no-cache"
+    fi
 
     if [ "$PUSH" = true ]; then
         build_command="$build_command --push"
