@@ -67,8 +67,6 @@ RUN set -e && \
     tlmgr --version && \
     echo "Configuring tlmgr..." && \
     tlmgr option -- autobackup 0 && \
-    echo "Updating tlmgr repository..." && \
-    tlmgr update --self --all && \
     tlmgr option && \
     echo "TinyTeX verification and configuration completed."
 
