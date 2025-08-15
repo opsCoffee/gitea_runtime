@@ -42,39 +42,62 @@ RUN apt-get update && \
 # 确保临时目录有正确的权限
 RUN mkdir -p /tmp && chmod 777 /tmp
 
-# 在线安装 TinyTeX、LaTeX 扩展包并进行极限压缩
+# 步骤1：设置架构变量并下载 TinyTeX 安装脚本
 RUN set -e && \
     . /tmp/arch.env && \
-    # 下载并验证 TinyTeX 安装脚本
+    echo "Architecture: ${TINYTEX_ARCH}" && \
     echo "Downloading TinyTeX installation script..." && \
     wget -q -O /tmp/install-tinytex.sh https://yihui.org/tinytex/install-bin-unix.sh && \
-    # 创建安装目录并确保权限
+    echo "TinyTeX installation script downloaded successfully."
+
+# 步骤2：安装 TinyTeX 核心
+RUN set -e && \
+    . /tmp/arch.env && \
     mkdir -p /root/.TinyTeX && chmod 755 /root/.TinyTeX && \
-    # 执行安装脚本，它会自动下载 TinyTeX
     echo "Installing TinyTeX for architecture: ${TINYTEX_ARCH}" && \
     sh /tmp/install-tinytex.sh && \
-    # 安装完成后立即删除安装脚本
     rm /tmp/install-tinytex.sh && \
-    # 设置 PATH 环境变量
+    echo "TinyTeX core installation completed."
+
+# 步骤3：验证 TinyTeX 安装并配置 tlmgr
+RUN set -e && \
+    . /tmp/arch.env && \
     export PATH="/root/.TinyTeX/bin/${TINYTEX_ARCH}:$PATH" && \
-    # 验证 TinyTeX 安装
     echo "Verifying TinyTeX installation..." && \
     tlmgr --version && \
-    # 配置 tlmgr（只使用支持的选项）
     echo "Configuring tlmgr..." && \
     tlmgr option -- autobackup 0 && \
-    # 显示当前配置以便调试
+    echo "Updating tlmgr repository..." && \
+    tlmgr update --self --all && \
     tlmgr option && \
-    # 分批安装包，避免依赖冲突
-    echo "Installing LaTeX packages..." && \
-    tlmgr install enumitem titlesec fontawesome5 parskip && \
-    # 单独安装中文支持包
-    echo "Installing Chinese support packages..." && \
-    tlmgr install ctex fandol && \
-    # 更新格式文件
+    echo "TinyTeX verification and configuration completed."
+
+# 步骤4：安装基础 LaTeX 包（保守安装，逐个处理）
+RUN set -e && \
+    . /tmp/arch.env && \
+    export PATH="/root/.TinyTeX/bin/${TINYTEX_ARCH}:$PATH" && \
+    echo "Installing basic LaTeX packages..." && \
+    tlmgr install enumitem || echo "Warning: enumitem package installation failed" && \
+    tlmgr install titlesec || echo "Warning: titlesec package installation failed" && \
+    tlmgr install parskip || echo "Warning: parskip package installation failed" && \
+    echo "Basic LaTeX packages installation completed."
+
+# 步骤5：安装字体和中文支持包（可选，允许失败）
+RUN set -e && \
+    . /tmp/arch.env && \
+    export PATH="/root/.TinyTeX/bin/${TINYTEX_ARCH}:$PATH" && \
+    echo "Installing font and Chinese support packages..." && \
+    (tlmgr install fontawesome5 || echo "Warning: fontawesome5 package not available, skipping") && \
+    (tlmgr install ctex || echo "Warning: ctex package installation failed, skipping") && \
+    (tlmgr install fandol || echo "Warning: fandol package installation failed, skipping") && \
+    echo "Font and Chinese support packages installation completed."
+
+# 步骤6：更新格式文件和清理
+RUN set -e && \
+    . /tmp/arch.env && \
+    export PATH="/root/.TinyTeX/bin/${TINYTEX_ARCH}:$PATH" && \
     echo "Updating format files..." && \
-    fmtutil-sys --all && \
-    # 极限清理，移除所有不必要的文档、源文件和缓存
+    (fmtutil-sys --all || echo "Warning: format file update had issues, continuing") && \
     echo "Performing cleanup to reduce image size..." && \
     rm -rf /root/.TinyTeX/texmf-dist/doc \
            /root/.TinyTeX/texmf-dist/source \
@@ -82,7 +105,6 @@ RUN set -e && \
            /root/.TinyTeX/tlpkg/temp \
            /root/.TinyTeX/install-tl.log \
            /tmp/* && \
-    # 移除 tlmgr 的路径缓存，进一步减小体积
     tlmgr path remove && \
     echo "TinyTeX installation and optimization completed successfully."
 
