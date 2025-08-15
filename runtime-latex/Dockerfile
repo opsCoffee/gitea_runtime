@@ -27,7 +27,8 @@ RUN case "${TARGETARCH}" in \
         arm) TINYTEX_ARCH="armhf-linux" ;; \
         *) echo "Unsupported architecture: ${TARGETARCH}" && exit 1 ;; \
     esac && \
-    echo "TINYTEX_ARCH=${TINYTEX_ARCH}" > /tmp/arch.env
+    echo "TINYTEX_ARCH=${TINYTEX_ARCH}" > /tmp/arch.env && \
+    echo "export TINYTEX_ARCH=${TINYTEX_ARCH}" >> /etc/environment
 
 # 安装系统级依赖
 RUN apt-get update && \
@@ -137,7 +138,7 @@ ENV DEBIAN_FRONTEND=noninteractive \
     LC_ALL=C.UTF-8 \
     TZ=Asia/Shanghai
 
-# 根据目标架构设置 TinyTeX 二进制路径
+# 根据目标架构设置 TinyTeX 二进制路径并设置环境变量
 RUN case "${TARGETARCH}" in \
         amd64) TINYTEX_ARCH="x86_64-linux" ;; \
         arm64) TINYTEX_ARCH="aarch64-linux" ;; \
@@ -145,7 +146,9 @@ RUN case "${TARGETARCH}" in \
         *) echo "Unsupported architecture: ${TARGETARCH}" && exit 1 ;; \
     esac && \
     echo "export PATH=\"/usr/local/TinyTeX/bin/${TINYTEX_ARCH}:\$PATH\"" > /etc/profile.d/tinytex.sh && \
-    chmod +x /etc/profile.d/tinytex.sh
+    chmod +x /etc/profile.d/tinytex.sh && \
+    echo "PATH=/usr/local/TinyTeX/bin/${TINYTEX_ARCH}:\$PATH" >> /etc/environment && \
+    echo "TINYTEX_ARCH=${TINYTEX_ARCH}" >> /etc/environment
 
 # 安装 TeX 运行所需的动态链接库和系统工具
 RUN apt-get update && \
@@ -174,18 +177,11 @@ COPY --from=tex-builder /root/.TinyTeX /usr/local/TinyTeX
 
 # 设置 TinyTeX 权限并创建必要目录
 RUN chown -R appuser:nodejs /usr/local/TinyTeX && \
-    mkdir -p /app /home/appuser && \
-    chown -R appuser:nodejs /app /home/appuser
+    mkdir -p /app /home/appuser /home/appuser/tmp && \
+    chown -R appuser:nodejs /app /home/appuser && \
+    chmod 755 /home/appuser/tmp
 
-# 设置环境变量，让系统能找到 TeX 程序
-RUN case "${TARGETARCH}" in \
-        amd64) TINYTEX_ARCH="x86_64-linux" ;; \
-        arm64) TINYTEX_ARCH="aarch64-linux" ;; \
-        arm) TINYTEX_ARCH="armhf-linux" ;; \
-        *) echo "Unsupported architecture: ${TARGETARCH}" && exit 1 ;; \
-    esac && \
-    echo "PATH=/usr/local/TinyTeX/bin/${TINYTEX_ARCH}:\$PATH" >> /etc/environment
-
+# 设置动态 PATH 环境变量（架构特定）
 ENV PATH="/usr/local/TinyTeX/bin/x86_64-linux:/usr/local/TinyTeX/bin/aarch64-linux:/usr/local/TinyTeX/bin/armhf-linux:$PATH"
 
 # 创建工作目录
@@ -199,10 +195,11 @@ RUN echo '\documentclass{article}\begin{document}Hello LaTeX!\end{document}' > /
 
 # 添加健康检查 - 测试实际的 LaTeX 编译功能
 HEALTHCHECK --interval=30s --timeout=15s --start-period=10s --retries=3 \
-  CMD xelatex --version && \
-      echo '\documentclass{article}\begin{document}Health Check\end{document}' > /tmp/health.tex && \
-      xelatex -interaction=nonstopmode -output-directory=/tmp /tmp/health.tex >/dev/null 2>&1 && \
-      test -f /tmp/health.pdf || exit 1
+  CMD source /etc/profile.d/tinytex.sh && \
+      xelatex --version && \
+      echo '\documentclass{article}\begin{document}Health Check\end{document}' > /home/appuser/tmp/health.tex && \
+      xelatex -interaction=nonstopmode -output-directory=/home/appuser/tmp /home/appuser/tmp/health.tex >/dev/null 2>&1 && \
+      test -f /home/appuser/tmp/health.pdf || exit 1
 
 # 设置默认命令
 CMD ["bash", "-c", "source /etc/profile.d/tinytex.sh && xelatex --version"]
