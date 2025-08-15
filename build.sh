@@ -8,7 +8,7 @@ NC='\033[0m' # No Color
 
 # 设置默认值
 REGISTRY="git.httpx.online/kenyon"
-PLATFORMS="linux/amd64"
+PLATFORMS="linux/amd64,linux/arm64"
 PUSH=false
 TAG="latest"
 NO_CACHE=false
