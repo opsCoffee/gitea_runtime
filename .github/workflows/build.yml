@@ -104,10 +104,11 @@ jobs:
     # needs: [build, test]
     needs: [build]
     runs-on: ubuntu-latest
-    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master') && needs.test.result == 'success'
+    # if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master') && needs.test.result == 'success'
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master') && needs.build.result == 'success'
     strategy:
       matrix:
-        runtime: [markdown, asustor, template, latex]
+        runtime: [markdown, asustor, template, latex, base]
 
     steps:
       - name: Login to Docker Registry
