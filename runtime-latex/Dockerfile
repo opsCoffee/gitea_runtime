@@ -8,8 +8,8 @@
 FROM debian:12-slim AS tex-builder
 
 ENV DEBIAN_FRONTEND=noninteractive
-# 将 PATH 设置在顶部，确保后续所有 RUN 指令都能使用
-ENV PATH="/root/.TinyTeX/bin/x86_64-linux:$PATH"
+# 动态设置 PATH，支持多架构
+ENV PATH="/root/.TinyTeX/bin/$(uname -m)-linux:$PATH"
 
 # 安装系统级依赖
 RUN apt-get update && \
@@ -31,15 +31,16 @@ RUN wget -q -O /tmp/install-tinytex.sh https://yihui.org/tinytex/install-bin-uni
     sh /tmp/install-tinytex.sh && \
     # 安装完成后立即删除安装脚本
     rm /tmp/install-tinytex.sh && \
+    # 动态设置PATH以支持多架构
+    export PATH="/root/.TinyTeX/bin/$(uname -m)-linux:$PATH" && \
     # 使用默认的 CTAN 镜像源并安装所需宏包
     tlmgr option -- autobackup 0 && \
-    tlmgr install \
-        enumitem \
-        titlesec \
-        fontawesome5 \
-        parskip \
-        ctex \
-        fandol && \
+    # 分批安装包，避免依赖冲突
+    tlmgr install enumitem titlesec fontawesome5 parskip && \
+    # 单独安装中文支持包
+    tlmgr install ctex fandol && \
+    # 更新格式文件
+    fmtutil-sys --all && \
     # 极限清理，移除所有不必要的文档、源文件和缓存
     rm -rf /root/.TinyTeX/texmf-dist/doc \
            /root/.TinyTeX/texmf-dist/source \
@@ -73,8 +74,8 @@ RUN apt-get update && \
 # 将精简后的 TinyTeX 复制到最终镜像
 COPY --from=tex-builder /root/.TinyTeX /usr/local/TinyTeX
 
-# 设置环境变量，让系统能找到 TeX 程序
-ENV PATH="/usr/local/TinyTeX/bin/x86_64-linux:$PATH"
+# 动态设置环境变量，让系统能找到 TeX 程序
+ENV PATH="/usr/local/TinyTeX/bin/$(uname -m)-linux:$PATH"
 
 # 创建工作目录
 WORKDIR /app

@@ -32,8 +32,6 @@ jobs:
         runtime: [markdown, asustor, template, latex]
     outputs:
       image_tag: ${{ steps.get_sha.outputs.sha }}
-      image_name: ${{ env.REGISTRY }}/${{ env.REGISTRY_NAMESPACE }}/gitea-runtime-${{ matrix.runtime }}
-      build_success: ${{ steps.build_step.outcome == 'success' }}
 
     steps:
       - name: Checkout code
@@ -84,12 +82,13 @@ jobs:
         timeout-minutes: 15
         run: |
           chmod +x ./test_images.sh
-          ./test_images.sh ${{ matrix.runtime }} --registry ${{ needs.build.outputs.image_name }} --tag ${{ needs.build.outputs.image_tag }}
+          IMAGE_NAME="${{ env.REGISTRY }}/${{ env.REGISTRY_NAMESPACE }}/gitea-runtime-${{ matrix.runtime }}"
+          ./test_images.sh ${{ matrix.runtime }} --registry $IMAGE_NAME --tag ${{ needs.build.outputs.image_tag }}
 
       - name: Security scan with Trivy
         uses: aquasecurity/trivy-action@0.28.0
         with:
-          image-ref: '${{ needs.build.outputs.image_name }}:${{ needs.build.outputs.image_tag }}'
+          image-ref: '${{ env.REGISTRY }}/${{ env.REGISTRY_NAMESPACE }}/gitea-runtime-${{ matrix.runtime }}:${{ needs.build.outputs.image_tag }}'
           format: 'sarif'
           output: 'trivy-results.sarif'
           severity: 'CRITICAL,HIGH'
@@ -117,33 +116,29 @@ jobs:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
 
-      - name: Get commit SHA and date
-        id: get_info
+      - name: Set image variables
+        id: vars
         run: |
           echo "sha=$(echo ${GITHUB_SHA::7})" >> $GITHUB_OUTPUT
           echo "date=$(date +%Y%m%d)" >> $GITHUB_OUTPUT
 
-      - name: Get image identifiers
-        id: get_image
-        run: |
-          IMAGE_NAME="${{ env.REGISTRY }}/${{ env.REGISTRY_NAMESPACE }}/gitea-runtime-${{ matrix.runtime }}"
-          STAGING_TAG="${{ steps.get_info.outputs.sha }}"
-          echo "image_name=$IMAGE_NAME" >> $GITHUB_OUTPUT
-          echo "staging_tag=$STAGING_TAG" >> $GITHUB_OUTPUT
-
       - name: Pull staged image
         timeout-minutes: 10
-        run: docker pull ${{ steps.get_image.outputs.image_name }}:${{ steps.get_image.outputs.staging_tag }}
+        run: |
+          IMAGE_NAME="${{ env.REGISTRY }}/${{ env.REGISTRY_NAMESPACE }}/gitea-runtime-${{ matrix.runtime }}"
+          docker pull $IMAGE_NAME:${{ steps.vars.outputs.sha }}
 
       - name: Tag and push 'latest'
         timeout-minutes: 10
         run: |
-          docker tag ${{ steps.get_image.outputs.image_name }}:${{ steps.get_image.outputs.staging_tag }} ${{ steps.get_image.outputs.image_name }}:latest
-          docker push ${{ steps.get_image.outputs.image_name }}:latest
+          IMAGE_NAME="${{ env.REGISTRY }}/${{ env.REGISTRY_NAMESPACE }}/gitea-runtime-${{ matrix.runtime }}"
+          docker tag $IMAGE_NAME:${{ steps.vars.outputs.sha }} $IMAGE_NAME:latest
+          docker push $IMAGE_NAME:latest
 
       - name: Tag and push date version
         timeout-minutes: 10
         run: |
-          DATE_TAG="v${{ steps.get_info.outputs.date }}"
-          docker tag ${{ steps.get_image.outputs.image_name }}:${{ steps.get_image.outputs.staging_tag }} ${{ steps.get_image.outputs.image_name }}:$DATE_TAG
-          docker push ${{ steps.get_image.outputs.image_name }}:$DATE_TAG
+          IMAGE_NAME="${{ env.REGISTRY }}/${{ env.REGISTRY_NAMESPACE }}/gitea-runtime-${{ matrix.runtime }}"
+          DATE_TAG="v${{ steps.vars.outputs.date }}"
+          docker tag $IMAGE_NAME:${{ steps.vars.outputs.sha }} $IMAGE_NAME:$DATE_TAG
+          docker push $IMAGE_NAME:$DATE_TAG

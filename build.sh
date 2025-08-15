@@ -8,7 +8,7 @@ NC='\033[0m' # No Color
 
 # 设置默认值
 REGISTRY="git.httpx.online/kenyon"
-PLATFORMS="linux/amd64,linux/arm64"
+PLATFORMS="linux/amd64"
 PUSH=false
 TAG="latest"
 
@@ -88,12 +88,16 @@ build_and_push() {
         build_command="$build_command --load"
     fi
 
+    echo -e "${BLUE}执行构建命令:${NC}"
+    echo "$build_command"
+    
     eval $build_command
 
     if [ $? -eq 0 ]; then
         echo -e "${GREEN}✅ 镜像 ${full_image_name}:${TAG} 构建完成${NC}"
     else
         echo -e "${RED}❌ 构建镜像 ${full_image_name}:${TAG} 失败${NC}"
+        echo -e "${RED}构建命令: $build_command${NC}"
         exit 1
     fi
 }
