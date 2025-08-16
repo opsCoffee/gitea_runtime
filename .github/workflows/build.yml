@@ -50,14 +50,6 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Initialize build cache
-        run: |
-          mkdir -p /tmp/.buildx-cache
-          # 如果缓存目录为空，创建一个基本的索引文件
-          if [ ! -f "/tmp/.buildx-cache/index.json" ]; then
-            echo '{"version": 1, "records": []}' > /tmp/.buildx-cache/index.json
-          fi
-
       - name: Login to Docker Registry
         uses: docker/login-action@v3
         with:
@@ -70,17 +62,6 @@ jobs:
         timeout-minutes: ${{ matrix.runtime == 'latex' && 90 || 60 }}
         run: |
           chmod +x ./build.sh
-          
-          # 为 LaTeX 镜像设置特殊的环境变量
-          if [ "${{ matrix.runtime }}" = "latex" ]; then
-            echo "Building LaTeX runtime with special configuration..."
-            export DOCKER_BUILDKIT=1
-            export BUILDKIT_PROGRESS=plain
-            # 增加 Docker daemon 的资源限制
-            echo '{"max-concurrent-downloads": 3, "max-concurrent-uploads": 5}' | sudo tee /etc/docker/daemon.json
-            sudo systemctl reload docker || true
-          fi
-          
           ./build.sh --only ${{ matrix.runtime }} --tag ${{ steps.get_sha.outputs.sha }} --push
 
   test:

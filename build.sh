@@ -86,11 +86,9 @@ build_and_push() {
     # 处理缓存清理
     if [ "$CLEAN_CACHE" = true ]; then
         echo -e "${BLUE}🧹 清理构建缓存...${NC}"
-        rm -rf /tmp/.buildx-cache
+        # 清理 registry 缓存（如果需要的话）
+        echo "Registry cache cleanup would be handled by registry TTL"
     fi
-    
-    # 确保本地缓存目录存在
-    mkdir -p /tmp/.buildx-cache
 
     local build_command="docker buildx build \
         --platform \"$PLATFORMS\" \
@@ -99,28 +97,11 @@ build_and_push() {
         --build-arg \"BUILD_DATE=$(date -u +'%Y-%m-%dT%H:%M:%SZ')\" \
         --progress=plain"
     
-    # 根据选项添加缓存配置（必须在 --push/--load 之前）
-    if [ "$NO_CACHE" = false ]; then
-        # 确保缓存目录存在且有正确的权限
-        if [ -d "/tmp/.buildx-cache" ] && [ "$(ls -A /tmp/.buildx-cache 2>/dev/null)" ]; then
-            build_command="$build_command \
-                --cache-from \"type=local,src=/tmp/.buildx-cache\""
-        fi
-        build_command="$build_command \
-            --cache-to \"type=local,dest=/tmp/.buildx-cache,mode=max\""
-    else
+    # 暂时禁用缓存以确保构建稳定性
+    if [ "$NO_CACHE" = true ]; then
         build_command="$build_command --no-cache"
     fi
-    
-    # LaTeX 镜像特殊处理
-    if [ "$runtime_name" = "latex" ]; then
-        build_command="$build_command \
-            --build-arg BUILDKIT_INLINE_CACHE=1"
-        
-        # 为 LaTeX 镜像暂时只构建 AMD64，避免 ARM64 模拟器问题
-        echo -e "${BLUE}⚠️  LaTeX 镜像暂时只构建 AMD64 架构以避免 ARM64 模拟器问题${NC}"
-        build_command=$(echo "$build_command" | sed 's/--platform "[^"]*"/--platform "linux\/amd64"/')
-    fi
+    # 注意：缓存已暂时禁用，如需启用请使用 registry 缓存
 
     if [ "$PUSH" = true ]; then
         build_command="$build_command --push"
