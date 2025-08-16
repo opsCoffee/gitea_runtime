@@ -48,6 +48,8 @@ RUN set -e && \
     . /tmp/arch.env && \
     echo "Architecture: ${TINYTEX_ARCH}" && \
     echo "Installing TinyTeX using simplified method..." && \
+    # 创建安装目录
+    mkdir -p /root/.TinyTeX && \
     # 下载并安装TinyTeX
     cd /tmp && \
     wget --timeout=300 --tries=3 -O install-tinytex.sh \
