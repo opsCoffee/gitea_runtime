@@ -173,38 +173,44 @@ jobs:
           echo "sha=$(echo ${GITHUB_SHA::7})" >> $GITHUB_OUTPUT
           echo "date=$(date +%Y%m%d)" >> $GITHUB_OUTPUT
 
-      - name: Build and push multi-platform image
-        timeout-minutes: ${{ matrix.runtime == 'latex' && 120 || 60 }}
-        run: |
-          chmod +x ./build.sh
-          # 为LaTeX镜像设置更多的Docker构建资源
-          if [ "${{ matrix.runtime }}" = "latex" ]; then
-            export DOCKER_BUILDKIT=1
-            export BUILDX_NO_DEFAULT_ATTESTATIONS=1
-          fi
-          # 多平台构建并推送到远程仓库
-          ./build.sh --only ${{ matrix.runtime }} --tag ${{ steps.vars.outputs.sha }} --push
-
-      - name: Tag and push additional versions
-        timeout-minutes: 10
+      # 下载已构建和测试过的镜像
+      - name: Download tested image artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ matrix.runtime }}-image
+          
+      - name: Push release images with latest and date tags only
         run: |
           IMAGE_NAME="${{ env.REGISTRY }}/${{ env.REGISTRY_NAMESPACE }}/gitea-runtime-${{ matrix.runtime }}"
-          
-          # 为 latest 标签创建多平台构建
-          docker buildx build \
-            --platform "linux/amd64,linux/arm64" \
-            --tag "$IMAGE_NAME:latest" \
-            --build-arg "GITEA_VERSION=${{ steps.vars.outputs.sha }}" \
-            --build-arg "BUILD_DATE=$(date -u +'%Y-%m-%dT%H:%M:%SZ')" \
-            --push \
-            "./runtime-${{ matrix.runtime }}"
-          
-          # 为日期标签创建多平台构建
           DATE_TAG="v${{ steps.vars.outputs.date }}"
-          docker buildx build \
-            --platform "linux/amd64,linux/arm64" \
-            --tag "$IMAGE_NAME:$DATE_TAG" \
-            --build-arg "GITEA_VERSION=${{ steps.vars.outputs.sha }}" \
-            --build-arg "BUILD_DATE=$(date -u +'%Y-%m-%dT%H:%M:%SZ')" \
-            --push \
-            "./runtime-${{ matrix.runtime }}"
+          
+          if [ "${{ matrix.runtime }}" = "latex" ]; then
+            # LaTeX 镜像：只推送 AMD64 版本的 latest 和日期标签
+            echo "Processing LaTeX image (AMD64 only)..."
+            
+            # 加载已测试的 AMD64 镜像
+            docker load -i ${{ matrix.runtime }}-image.tar
+            
+            # 重新标记并推送 latest 和日期标签（不推送原始标签）
+            docker tag $IMAGE_NAME:${{ needs.build.outputs.image_tag }} $IMAGE_NAME:latest
+            docker tag $IMAGE_NAME:${{ needs.build.outputs.image_tag }} $IMAGE_NAME:$DATE_TAG
+            docker push $IMAGE_NAME:latest
+            docker push $IMAGE_NAME:$DATE_TAG
+            
+          else
+            # 其他镜像：构建并推送多架构版本的 latest 和日期标签
+            echo "Processing multi-arch image for ${{ matrix.runtime }}..."
+            
+            # 使用 buildx 构建完整的多架构镜像（包含 AMD64 + ARM64）
+            chmod +x ./build.sh
+            
+            # 构建并推送多架构镜像的 latest 和日期标签（不推送原始标签）
+            docker buildx build \
+              --platform "linux/amd64,linux/arm64" \
+              --tag "$IMAGE_NAME:latest" \
+              --tag "$IMAGE_NAME:$DATE_TAG" \
+              --build-arg "GITEA_VERSION=${{ needs.build.outputs.image_tag }}" \
+              --build-arg "BUILD_DATE=$(date -u +'%Y-%m-%dT%H:%M:%SZ')" \
+              --push \
+              "./runtime-${{ matrix.runtime }}"
+          fi
