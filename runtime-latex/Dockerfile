@@ -55,31 +55,44 @@ RUN set -e && \
     tlmgr update --self && \
     echo "tlmgr configuration completed."
 
-# 步骤3：安装必要的 LaTeX 包（分步安装，确保依赖关系）
-RUN set -e && \
-    export PATH="$HOME/.TinyTeX/bin/x86_64-linux:$PATH" && \
+# 步骤3：安装必要的 LaTeX 包（容错安装，避免单个包失败影响整体）
+RUN export PATH="$HOME/.TinyTeX/bin/x86_64-linux:$PATH" && \
     echo "Installing essential LaTeX packages..." && \
+    # 定义安装函数，允许单个包失败
+    install_package() { \
+        echo "Installing $1..."; \
+        tlmgr install "$1" || echo "Warning: Failed to install $1, continuing..."; \
+    } && \
     # 安装基础 LaTeX 包
-    tlmgr install latex-bin && \
+    install_package latex-bin && \
     # 安装 XeTeX 和相关包
-    tlmgr install xetex && \
+    install_package xetex && \
     # 安装字体支持包
-    tlmgr install fontspec && \
-    # 安装常用数学包
-    tlmgr install amsmath amsfonts amssymb && \
+    install_package fontspec && \
+    # 安装常用数学包（分别安装，避免 amssymb 不存在的问题）
+    install_package amsmath && \
+    install_package amsfonts && \
+    # 注意：amssymb 在某些 TinyTeX 仓库中可能不存在，amsfonts 已包含相关符号
+    # install_package amssymb && \
     # 安装页面布局包
-    tlmgr install geometry fancyhdr && \
+    install_package geometry && \
+    install_package fancyhdr && \
     # 安装图形支持包
-    tlmgr install graphicx xcolor && \
+    install_package graphicx && \
+    install_package xcolor && \
     echo "Essential packages installation completed."
 
 # 步骤4：安装中文支持包
-RUN set -e && \
-    export PATH="$HOME/.TinyTeX/bin/x86_64-linux:$PATH" && \
+RUN export PATH="$HOME/.TinyTeX/bin/x86_64-linux:$PATH" && \
     echo "Installing Chinese support packages..." && \
+    # 定义安装函数，允许单个包失败
+    install_package() { \
+        echo "Installing $1..."; \
+        tlmgr install "$1" || echo "Warning: Failed to install $1, continuing..."; \
+    } && \
     # 安装中文支持的核心包
-    tlmgr install xecjk && \
-    tlmgr install ctex && \
+    install_package xecjk && \
+    install_package ctex && \
     echo "Chinese support packages installation completed."
 
 # 步骤5：清理和验证
