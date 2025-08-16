@@ -23,6 +23,12 @@ env:
   REGISTRY: git.httpx.online
   REGISTRY_NAMESPACE: kenyon
 
+# Add required permissions for security scanning
+permissions:
+  contents: read
+  security-events: write
+  actions: read
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -44,6 +50,14 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
+      - name: Initialize build cache
+        run: |
+          mkdir -p /tmp/.buildx-cache
+          # 如果缓存目录为空，创建一个基本的索引文件
+          if [ ! -f "/tmp/.buildx-cache/index.json" ]; then
+            echo '{"version": 1, "records": []}' > /tmp/.buildx-cache/index.json
+          fi
+
       - name: Login to Docker Registry
         uses: docker/login-action@v3
         with:
@@ -53,59 +67,82 @@ jobs:
 
       - name: Build and push to staging
         id: build_step
-        timeout-minutes: 30
+        timeout-minutes: ${{ matrix.runtime == 'latex' && 90 || 60 }}
         run: |
           chmod +x ./build.sh
+          
+          # 为 LaTeX 镜像设置特殊的环境变量
+          if [ "${{ matrix.runtime }}" = "latex" ]; then
+            echo "Building LaTeX runtime with special configuration..."
+            export DOCKER_BUILDKIT=1
+            export BUILDKIT_PROGRESS=plain
+            # 增加 Docker daemon 的资源限制
+            echo '{"max-concurrent-downloads": 3, "max-concurrent-uploads": 5}' | sudo tee /etc/docker/daemon.json
+            sudo systemctl reload docker || true
+          fi
+          
           ./build.sh --only ${{ matrix.runtime }} --tag ${{ steps.get_sha.outputs.sha }} --push
 
-  # test:
-  #   needs: build
-  #   runs-on: ubuntu-latest
-  #   if: needs.build.result == 'success'
-  #   strategy:
-  #     fail-fast: false
-  #     matrix:
-  #       runtime: [markdown, asustor, template, latex]
+  test:
+    needs: build
+    runs-on: ubuntu-latest
+    if: needs.build.result == 'success'
+    strategy:
+      fail-fast: false
+      matrix:
+        runtime: [markdown, asustor, template, latex]
     
-  #   steps:
-  #     - name: Checkout code
-  #       uses: actions/checkout@v4
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-  #     - name: Login to Docker Registry
-  #       uses: docker/login-action@v3
-  #       with:
-  #         registry: ${{ env.REGISTRY }}
-  #         username: ${{ secrets.DOCKER_USERNAME }}
-  #         password: ${{ secrets.DOCKER_PASSWORD }}
+      - name: Login to Docker Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
 
-  #     - name: Run tests on staged image
-  #       timeout-minutes: 15
-  #       run: |
-  #         chmod +x ./test_images.sh
-  #         IMAGE_NAME="${{ env.REGISTRY }}/${{ env.REGISTRY_NAMESPACE }}/gitea-runtime-${{ matrix.runtime }}"
-  #         ./test_images.sh ${{ matrix.runtime }} --registry $IMAGE_NAME --tag ${{ needs.build.outputs.image_tag }}
+      - name: Run tests on staged image
+        timeout-minutes: 15
+        run: |
+          chmod +x ./test_images.sh
+          IMAGE_NAME="${{ env.REGISTRY }}/${{ env.REGISTRY_NAMESPACE }}/gitea-runtime-${{ matrix.runtime }}"
+          ./test_images.sh ${{ matrix.runtime }} --registry $IMAGE_NAME --tag ${{ needs.build.outputs.image_tag }}
 
-  #     - name: Security scan with Trivy
-  #       uses: aquasecurity/trivy-action@0.28.0
-  #       with:
-  #         image-ref: '${{ env.REGISTRY }}/${{ env.REGISTRY_NAMESPACE }}/gitea-runtime-${{ matrix.runtime }}:${{ needs.build.outputs.image_tag }}'
-  #         format: 'sarif'
-  #         output: 'trivy-results.sarif'
-  #         severity: 'CRITICAL,HIGH'
-  #       continue-on-error: true
+      - name: Security scan with Trivy
+        uses: aquasecurity/trivy-action@0.30.0
+        with:
+          image-ref: '${{ env.REGISTRY }}/${{ env.REGISTRY_NAMESPACE }}/gitea-runtime-${{ matrix.runtime }}:${{ needs.build.outputs.image_tag }}'
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+          severity: 'CRITICAL,HIGH'
+        continue-on-error: true
 
-  #     - name: Upload Trivy scan results
-  #       uses: github/codeql-action/upload-sarif@v3
-  #       if: always()
-  #       with:
-  #         sarif_file: 'trivy-results.sarif'
+      - name: Check if SARIF file exists
+        id: check_sarif
+        run: |
+          if [ -f "trivy-results.sarif" ]; then
+            echo "sarif_exists=true" >> $GITHUB_OUTPUT
+            echo "SARIF file found"
+            ls -la trivy-results.sarif
+          else
+            echo "sarif_exists=false" >> $GITHUB_OUTPUT
+            echo "SARIF file not found"
+            ls -la
+          fi
+
+      - name: Upload Trivy scan results
+        uses: github/codeql-action/upload-sarif@v3
+        if: steps.check_sarif.outputs.sarif_exists == 'true'
+        with:
+          sarif_file: 'trivy-results.sarif'
+        continue-on-error: true
 
   push-release:
-    # needs: [build, test]
-    needs: [build]
+    needs: [build, test]
     runs-on: ubuntu-latest
-    # if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master') && needs.test.result == 'success'
-    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master') && needs.build.result == 'success'
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master') && needs.build.result == 'success' && (needs.test.result == 'success' || needs.test.result == 'skipped')
     strategy:
       matrix:
         runtime: [markdown, asustor, template, latex, base]

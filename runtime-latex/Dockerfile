@@ -43,21 +43,50 @@ RUN apt-get update && \
 # 确保临时目录有正确的权限
 RUN mkdir -p /tmp && chmod 777 /tmp
 
-# 步骤1：设置架构变量并下载 TinyTeX 安装脚本
+# 步骤1：设置架构变量并下载 TinyTeX 安装脚本（增强错误处理）
 RUN set -e && \
     . /tmp/arch.env && \
     echo "Architecture: ${TINYTEX_ARCH}" && \
     echo "Downloading TinyTeX installation script..." && \
-    wget -q -O /tmp/install-tinytex.sh https://yihui.org/tinytex/install-bin-unix.sh && \
-    echo "TinyTeX installation script downloaded successfully."
+    # 增加重试机制和更详细的错误信息
+    for i in 1 2 3; do \
+        echo "Download attempt $i..." && \
+        if wget --timeout=60 --tries=3 -q -O /tmp/install-tinytex.sh https://yihui.org/tinytex/install-bin-unix.sh; then \
+            echo "TinyTeX installation script downloaded successfully." && \
+            break; \
+        else \
+            echo "Download attempt $i failed" && \
+            if [ $i -eq 3 ]; then \
+                echo "All download attempts failed" && \
+                exit 1; \
+            fi && \
+            sleep 10; \
+        fi; \
+    done
 
-# 步骤2：安装 TinyTeX 核心
+# 步骤2：安装 TinyTeX 核心（增强错误处理和调试信息）
 RUN set -e && \
     . /tmp/arch.env && \
     mkdir -p /root/.TinyTeX && chmod 755 /root/.TinyTeX && \
     echo "Installing TinyTeX for architecture: ${TINYTEX_ARCH}" && \
-    sh /tmp/install-tinytex.sh && \
-    rm /tmp/install-tinytex.sh && \
+    echo "Current working directory: $(pwd)" && \
+    echo "Available disk space: $(df -h /tmp)" && \
+    echo "Memory info: $(free -h)" && \
+    # 设置更宽松的环境变量
+    export TINYTEX_INSTALLER_TIMEOUT=3600 && \
+    export DEBIAN_FRONTEND=noninteractive && \
+    # 运行安装脚本并捕获输出
+    if ! sh -x /tmp/install-tinytex.sh 2>&1 | tee /tmp/tinytex-install.log; then \
+        echo "TinyTeX installation failed. Log contents:" && \
+        cat /tmp/tinytex-install.log && \
+        echo "System info:" && \
+        uname -a && \
+        echo "Architecture info:" && \
+        echo "TARGETARCH=${TARGETARCH}" && \
+        echo "TINYTEX_ARCH=${TINYTEX_ARCH}" && \
+        exit 1; \
+    fi && \
+    rm /tmp/install-tinytex.sh /tmp/tinytex-install.log && \
     echo "TinyTeX core installation completed."
 
 # 步骤3：验证 TinyTeX 安装并配置 tlmgr

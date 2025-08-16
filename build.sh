@@ -97,16 +97,29 @@ build_and_push() {
         --tag \"$full_image_name:${TAG}\" \
         --build-arg \"GITEA_VERSION=$version\" \
         --build-arg \"BUILD_DATE=$(date -u +'%Y-%m-%dT%H:%M:%SZ')\" \
-        --progress=plain \
-        \"$context_path\""
+        --progress=plain"
     
-    # 根据选项添加缓存配置
+    # 根据选项添加缓存配置（必须在 --push/--load 之前）
     if [ "$NO_CACHE" = false ]; then
+        # 确保缓存目录存在且有正确的权限
+        if [ -d "/tmp/.buildx-cache" ] && [ "$(ls -A /tmp/.buildx-cache 2>/dev/null)" ]; then
+            build_command="$build_command \
+                --cache-from \"type=local,src=/tmp/.buildx-cache\""
+        fi
         build_command="$build_command \
-            --cache-from \"type=local,src=/tmp/.buildx-cache\" \
             --cache-to \"type=local,dest=/tmp/.buildx-cache,mode=max\""
     else
         build_command="$build_command --no-cache"
+    fi
+    
+    # LaTeX 镜像特殊处理
+    if [ "$runtime_name" = "latex" ]; then
+        build_command="$build_command \
+            --build-arg BUILDKIT_INLINE_CACHE=1"
+        
+        # 为 LaTeX 镜像暂时只构建 AMD64，避免 ARM64 模拟器问题
+        echo -e "${BLUE}⚠️  LaTeX 镜像暂时只构建 AMD64 架构以避免 ARM64 模拟器问题${NC}"
+        build_command=$(echo "$build_command" | sed 's/--platform "[^"]*"/--platform "linux\/amd64"/')
     fi
 
     if [ "$PUSH" = true ]; then
@@ -115,6 +128,8 @@ build_and_push() {
         # 如果不推送，则加载到本地 Docker daemon
         build_command="$build_command --load"
     fi
+    
+    build_command="$build_command \"$context_path\""
 
     echo -e "${BLUE}执行构建命令:${NC}"
     echo "$build_command"
