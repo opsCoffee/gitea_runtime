@@ -57,7 +57,7 @@ jobs:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
 
-      - name: Build and push to staging
+      - name: Build image locally
         id: build_step
         timeout-minutes: ${{ matrix.runtime == 'latex' && 120 || 60 }}
         run: |
@@ -67,7 +67,21 @@ jobs:
             export DOCKER_BUILDKIT=1
             export BUILDX_NO_DEFAULT_ATTESTATIONS=1
           fi
-          ./build.sh --only ${{ matrix.runtime }} --tag ${{ steps.get_sha.outputs.sha }} --push
+          # 只构建镜像，不推送到远程仓库
+          ./build.sh --only ${{ matrix.runtime }} --tag ${{ steps.get_sha.outputs.sha }}
+          
+      - name: Export built image
+        run: |
+          # 导出镜像为 tar 文件，供后续 job 使用
+          IMAGE_NAME="${{ env.REGISTRY }}/${{ env.REGISTRY_NAMESPACE }}/gitea-runtime-${{ matrix.runtime }}"
+          docker save $IMAGE_NAME:${{ steps.get_sha.outputs.sha }} -o ${{ matrix.runtime }}-image.tar
+          
+      - name: Upload image artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.runtime }}-image
+          path: ${{ matrix.runtime }}-image.tar
+          retention-days: 1
 
   test:
     needs: build
@@ -82,14 +96,20 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Login to Docker Registry
-        uses: docker/login-action@v3
+      - name: Download image artifact
+        uses: actions/download-artifact@v4
         with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ secrets.DOCKER_USERNAME }}
-          password: ${{ secrets.DOCKER_PASSWORD }}
+          name: ${{ matrix.runtime }}-image
+          
+      - name: Load Docker image
+        run: |
+          # 加载之前构建的镜像
+          docker load -i ${{ matrix.runtime }}-image.tar
+          # 验证镜像已加载
+          IMAGE_NAME="${{ env.REGISTRY }}/${{ env.REGISTRY_NAMESPACE }}/gitea-runtime-${{ matrix.runtime }}"
+          docker images | grep $IMAGE_NAME
 
-      - name: Run tests on staged image
+      - name: Run tests on local image
         timeout-minutes: 15
         run: |
           chmod +x ./test_images.sh
@@ -147,11 +167,26 @@ jobs:
           echo "sha=$(echo ${GITHUB_SHA::7})" >> $GITHUB_OUTPUT
           echo "date=$(date +%Y%m%d)" >> $GITHUB_OUTPUT
 
-      - name: Pull staged image
+      - name: Download image artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ matrix.runtime }}-image
+          
+      - name: Load Docker image
+        timeout-minutes: 10
+        run: |
+          # 加载之前构建的镜像
+          docker load -i ${{ matrix.runtime }}-image.tar
+          # 验证镜像已加载
+          IMAGE_NAME="${{ env.REGISTRY }}/${{ env.REGISTRY_NAMESPACE }}/gitea-runtime-${{ matrix.runtime }}"
+          docker images | grep $IMAGE_NAME
+
+      - name: Push SHA-tagged image
         timeout-minutes: 10
         run: |
           IMAGE_NAME="${{ env.REGISTRY }}/${{ env.REGISTRY_NAMESPACE }}/gitea-runtime-${{ matrix.runtime }}"
-          docker pull $IMAGE_NAME:${{ steps.vars.outputs.sha }}
+          # 首先推送 SHA 标签版本
+          docker push $IMAGE_NAME:${{ steps.vars.outputs.sha }}
 
       - name: Tag and push 'latest'
         timeout-minutes: 10
