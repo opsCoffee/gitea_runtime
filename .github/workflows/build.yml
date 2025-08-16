@@ -59,9 +59,14 @@ jobs:
 
       - name: Build and push to staging
         id: build_step
-        timeout-minutes: ${{ matrix.runtime == 'latex' && 90 || 60 }}
+        timeout-minutes: ${{ matrix.runtime == 'latex' && 120 || 60 }}
         run: |
           chmod +x ./build.sh
+          # 为LaTeX镜像设置更多的Docker构建资源
+          if [ "${{ matrix.runtime }}" = "latex" ]; then
+            export DOCKER_BUILDKIT=1
+            export BUILDX_NO_DEFAULT_ATTESTATIONS=1
+          fi
           ./build.sh --only ${{ matrix.runtime }} --tag ${{ steps.get_sha.outputs.sha }} --push
 
   test:
