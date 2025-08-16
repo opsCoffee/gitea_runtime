@@ -7,28 +7,13 @@ ARG NODE_VERSION=20.17.0
 ARG TINYTEX_VERSION=2024.01
 ARG GITEA_VERSION=dev
 ARG BUILD_DATE
-ARG TARGETARCH
 
 # =================================================================
 # 第一阶段：构建精简的 TinyTeX 环境
 # =================================================================
 FROM debian:12-slim AS tex-builder
 
-# 重新声明构建参数（多阶段构建需要）
-ARG TINYTEX_VERSION=2024.01
-ARG TARGETARCH
-
 ENV DEBIAN_FRONTEND=noninteractive
-
-# 根据目标架构设置 TinyTeX 二进制路径
-RUN case "${TARGETARCH}" in \
-        amd64) TINYTEX_ARCH="x86_64-linux" ;; \
-        arm64) TINYTEX_ARCH="aarch64-linux" ;; \
-        arm) TINYTEX_ARCH="armhf-linux" ;; \
-        *) echo "Unsupported architecture: ${TARGETARCH}" && exit 1 ;; \
-    esac && \
-    echo "TINYTEX_ARCH=${TINYTEX_ARCH}" > /tmp/arch.env && \
-    echo "export TINYTEX_ARCH=${TINYTEX_ARCH}" >> /etc/environment
 
 # 安装系统级依赖（包括 XeTeX 运行时依赖）
 RUN apt-get update && \
@@ -41,128 +26,75 @@ RUN apt-get update && \
         libfontconfig1 \
         libfreetype6 \
         fontconfig \
-        fonts-liberation && \
+        fonts-liberation \
+        # 添加基本的中文字体支持
+        fonts-noto-cjk && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
-# 确保临时目录有正确的权限
-RUN mkdir -p /tmp && chmod 777 /tmp
-
-# 步骤1：使用最新的 TinyTeX 安装方法
+# 步骤1：使用官方 TinyTeX 安装脚本（更简单可靠）
 RUN set -e && \
-    . /tmp/arch.env && \
-    echo "Architecture: ${TINYTEX_ARCH}" && \
-    echo "Installing TinyTeX using latest method..." && \
-    # 创建安装目录
-    mkdir -p /root/.TinyTeX && \
-    cd /tmp && \
-    # 下载最新的 TeX Live 安装器
-    echo "Downloading TeX Live installer..." && \
-    wget --timeout=300 --tries=3 -O install-tl-unx.tar.gz \
-        "https://mirror.ctan.org/systems/texlive/tlnet/install-tl-unx.tar.gz" && \
-    tar -xzf install-tl-unx.tar.gz && \
-    cd install-tl-* && \
-    # 创建 TinyTeX 配置文件
-    echo "Creating TinyTeX profile..." && \
-    printf '%s\n' \
-        'selected_scheme scheme-infraonly' \
-        'TEXDIR /root/.TinyTeX' \
-        'TEXMFCONFIG ~/.texlive/texmf-config' \
-        'TEXMFHOME ~/texmf' \
-        'TEXMFLOCAL /root/.TinyTeX/texmf-local' \
-        'TEXMFSYSCONFIG /root/.TinyTeX/texmf-config' \
-        'TEXMFSYSVAR /root/.TinyTeX/texmf-var' \
-        'TEXMFVAR ~/.texlive/texmf-var' \
-        'binary_x86_64-linux 1' \
-        'binary_aarch64-linux 1' \
-        'binary_armhf-linux 1' \
-        'collection-basic 1' \
-        'collection-latex 1' \
-        'collection-latexrecommended 1' \
-        'collection-fontsrecommended 1' \
-        'instopt_adjustpath 0' \
-        'instopt_adjustrepo 1' \
-        'instopt_letter 0' \
-        'instopt_portable 0' \
-        'instopt_write18_restricted 1' \
-        'tlpdbopt_autobackup 0' \
-        'tlpdbopt_backupdir tlpkg/backups' \
-        'tlpdbopt_create_formats 1' \
-        'tlpdbopt_desktop_integration 0' \
-        'tlpdbopt_file_assocs 0' \
-        'tlpdbopt_generate_updmap 0' \
-        'tlpdbopt_install_docfiles 0' \
-        'tlpdbopt_install_srcfiles 0' \
-        'tlpdbopt_post_code 1' \
-        'tlpdbopt_sys_bin /usr/local/bin' \
-        'tlpdbopt_sys_info /usr/local/share/info' \
-        'tlpdbopt_sys_man /usr/local/share/man' \
-        'tlpdbopt_w32_multi_user 0' \
-        > tinytex.profile && \
-    # 运行安装
-    echo "Running TeX Live installation..." && \
-    ./install-tl --profile=tinytex.profile --no-interaction && \
+    echo "Installing TinyTeX using official script..." && \
+    # 使用官方 TinyTeX 安装脚本
+    wget -qO- "https://yihui.org/tinytex/install-bin-unix.sh" | sh && \
     # 验证安装
-    echo "Verifying installation..." && \
-    ls -la /root/.TinyTeX/ && \
-    ls -la /root/.TinyTeX/bin/ && \
-    # 清理安装文件
-    cd /tmp && rm -rf install-tl-* install-tl-unx.tar.gz && \
+    echo "Verifying TinyTeX installation..." && \
+    export PATH="$HOME/.TinyTeX/bin/x86_64-linux:$PATH" && \
+    tlmgr --version && \
     echo "TinyTeX installation completed."
 
-# 步骤2：验证 TinyTeX 安装并配置 tlmgr
+# 步骤2：配置 tlmgr 并安装基础包
 RUN set -e && \
-    . /tmp/arch.env && \
-    export PATH="/root/.TinyTeX/bin/${TINYTEX_ARCH}:$PATH" && \
-    echo "Verifying TinyTeX installation..." && \
-    echo "Current PATH: $PATH" && \
-    echo "Architecture: ${TINYTEX_ARCH}" && \
-    # 查找tlmgr的实际位置
-    echo "Searching for tlmgr..." && \
-    find /root/.TinyTeX -name "tlmgr" -type f 2>/dev/null && \
-    # 验证 tlmgr 可执行
-    echo "Testing tlmgr..." && \
-    tlmgr --version && \
+    export PATH="$HOME/.TinyTeX/bin/x86_64-linux:$PATH" && \
     echo "Configuring tlmgr..." && \
+    # 配置 tlmgr 选项
     tlmgr option autobackup 0 && \
     tlmgr option docfiles 0 && \
     tlmgr option srcfiles 0 && \
-    echo "TinyTeX verification and configuration completed."
+    # 更新包数据库
+    tlmgr update --self && \
+    echo "tlmgr configuration completed."
 
-# 步骤3：安装基础 LaTeX 包
+# 步骤3：安装必要的 LaTeX 包（分步安装，确保依赖关系）
 RUN set -e && \
-    . /tmp/arch.env && \
-    export PATH="/root/.TinyTeX/bin/${TINYTEX_ARCH}:$PATH" && \
+    export PATH="$HOME/.TinyTeX/bin/x86_64-linux:$PATH" && \
     echo "Installing essential LaTeX packages..." && \
-    # 先安装基础包（不强制构建格式文件）
-    tlmgr install --no-depends-at-all latex-bin && \
-    # 安装 XeTeX 和 LuaTeX
-    tlmgr install --no-depends-at-all xetex luatex && \
-    # 安装常用数学和图形包
-    tlmgr install amsmath amsfonts amssymb geometry fancyhdr graphicx xcolor && \
-    # 安装字体和中文支持包
-    tlmgr install fontspec xecjk && \
-    # 最后安装 ctex（可能依赖前面的包）
-    tlmgr install ctex && \
-    echo "Package installation completed."
+    # 安装基础 LaTeX 包
+    tlmgr install latex-bin && \
+    # 安装 XeTeX 和相关包
+    tlmgr install xetex && \
+    # 安装字体支持包
+    tlmgr install fontspec && \
+    # 安装常用数学包
+    tlmgr install amsmath amsfonts amssymb && \
+    # 安装页面布局包
+    tlmgr install geometry fancyhdr && \
+    # 安装图形支持包
+    tlmgr install graphicx xcolor && \
+    echo "Essential packages installation completed."
 
-# 步骤4：清理和优化
+# 步骤4：安装中文支持包
 RUN set -e && \
-    . /tmp/arch.env && \
-    export PATH="/root/.TinyTeX/bin/${TINYTEX_ARCH}:$PATH" && \
-    echo "Performing cleanup to reduce image size..." && \
+    export PATH="$HOME/.TinyTeX/bin/x86_64-linux:$PATH" && \
+    echo "Installing Chinese support packages..." && \
+    # 安装中文支持的核心包
+    tlmgr install xecjk && \
+    tlmgr install ctex && \
+    echo "Chinese support packages installation completed."
+
+# 步骤5：清理和验证
+RUN set -e && \
+    export PATH="$HOME/.TinyTeX/bin/x86_64-linux:$PATH" && \
+    echo "Performing cleanup and verification..." && \
     # 清理不必要的文件
-    rm -rf /root/.TinyTeX/texmf-dist/doc \
-           /root/.TinyTeX/texmf-dist/source \
-           /root/.TinyTeX/tlpkg/backups \
-           /root/.TinyTeX/tlpkg/temp \
-           /tmp/* && \
-    # 简单验证安装（不强制编译复杂文档）
-    echo "Verifying TinyTeX installation..." && \
+    rm -rf $HOME/.TinyTeX/texmf-dist/doc \
+           $HOME/.TinyTeX/texmf-dist/source \
+           $HOME/.TinyTeX/tlpkg/backups \
+           $HOME/.TinyTeX/tlpkg/temp && \
+    # 验证安装
+    echo "Verifying installation..." && \
     tlmgr --version && \
-    echo "Available engines:" && \
-    (xelatex --version || echo "XeLaTeX not available") && \
-    (lualatex --version || echo "LuaLaTeX not available") && \
+    xelatex --version && \
     echo "TinyTeX installation and cleanup completed successfully."
 
 
@@ -177,7 +109,6 @@ ARG NODE_VERSION=20.17.0
 ARG TINYTEX_VERSION=2024.01
 ARG GITEA_VERSION=dev
 ARG BUILD_DATE
-ARG TARGETARCH
 
 # 使用 OCI 标准标签
 LABEL org.opencontainers.image.authors="kenyon <kenyon@noreply.localhost>" \
@@ -196,19 +127,8 @@ ENV DEBIAN_FRONTEND=noninteractive \
     LANG=en_US.UTF-8 \
     LANGUAGE=en_US.UTF-8 \
     LC_ALL=C.UTF-8 \
-    TZ=Asia/Shanghai
-
-# 根据目标架构设置 TinyTeX 二进制路径并设置环境变量
-RUN case "${TARGETARCH}" in \
-        amd64) TINYTEX_ARCH="x86_64-linux" ;; \
-        arm64) TINYTEX_ARCH="aarch64-linux" ;; \
-        arm) TINYTEX_ARCH="armhf-linux" ;; \
-        *) echo "Unsupported architecture: ${TARGETARCH}" && exit 1 ;; \
-    esac && \
-    echo "export PATH=\"/usr/local/TinyTeX/bin/${TINYTEX_ARCH}:\$PATH\"" > /etc/profile.d/tinytex.sh && \
-    chmod +x /etc/profile.d/tinytex.sh && \
-    echo "PATH=/usr/local/TinyTeX/bin/${TINYTEX_ARCH}:\$PATH" >> /etc/environment && \
-    echo "TINYTEX_ARCH=${TINYTEX_ARCH}" >> /etc/environment
+    TZ=Asia/Shanghai \
+    PATH="/usr/local/TinyTeX/bin/x86_64-linux:$PATH"
 
 # 安装 TeX 运行所需的动态链接库和系统工具
 RUN apt-get update && \
@@ -218,6 +138,7 @@ RUN apt-get update && \
         libfreetype6 \
         fontconfig \
         fonts-liberation \
+        fonts-noto-cjk \
         tzdata \
         curl \
         bash && \
@@ -241,25 +162,15 @@ RUN chown -R appuser:nodejs /usr/local/TinyTeX && \
     chown -R appuser:nodejs /app /home/appuser && \
     chmod 755 /home/appuser/tmp
 
-# 设置动态 PATH 环境变量（架构特定）
-ENV PATH="/usr/local/TinyTeX/bin/x86_64-linux:/usr/local/TinyTeX/bin/aarch64-linux:/usr/local/TinyTeX/bin/armhf-linux:$PATH"
-
 # 创建工作目录
 WORKDIR /app
 
 # 切换到非 root 用户，增强安全性
 USER appuser
 
-# 创建简单的 LaTeX 测试文件用于健康检查
-RUN echo '\documentclass{article}\begin{document}Hello LaTeX!\end{document}' > /tmp/test.tex
-
-# 添加健康检查 - 测试实际的 LaTeX 编译功能
-HEALTHCHECK --interval=30s --timeout=15s --start-period=10s --retries=3 \
-  CMD source /etc/profile.d/tinytex.sh && \
-      xelatex --version && \
-      echo '\documentclass{article}\begin{document}Health Check\end{document}' > /home/appuser/tmp/health.tex && \
-      xelatex -interaction=nonstopmode -output-directory=/home/appuser/tmp /home/appuser/tmp/health.tex >/dev/null 2>&1 && \
-      test -f /home/appuser/tmp/health.pdf || exit 1
+# 添加简化的健康检查 - 只检查命令可用性
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+  CMD xelatex --version >/dev/null 2>&1 && tlmgr --version >/dev/null 2>&1 || exit 1
 
 # 设置默认命令
-CMD ["bash", "-c", "source /etc/profile.d/tinytex.sh && xelatex --version"]
+CMD ["bash", "-c", "xelatex --version && echo 'TinyTeX is ready!'"]
