@@ -113,8 +113,15 @@ build_and_push() {
     if [ "$PUSH" = true ]; then
         build_command="$build_command --push"
     else
-        # 如果不推送，则加载到本地 Docker daemon
-        build_command="$build_command --load"
+        # 检查是否为多平台构建
+        if [[ "$PLATFORMS" == *","* ]]; then
+            echo -e "${BLUE}⚠️  多平台构建检测到，将构建但不加载到本地 Docker daemon${NC}"
+            echo -e "${BLUE}💡 如需本地测试，请使用单一平台: --platforms linux/amd64${NC}"
+            # 多平台构建时不能使用 --load，只构建不加载
+        else
+            # 单平台构建时可以加载到本地 Docker daemon
+            build_command="$build_command --load"
+        fi
     fi
     
     build_command="$build_command \"$context_path\""
