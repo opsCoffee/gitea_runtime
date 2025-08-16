@@ -114,7 +114,7 @@ jobs:
         run: |
           chmod +x ./test_images.sh
           IMAGE_NAME="${{ env.REGISTRY }}/${{ env.REGISTRY_NAMESPACE }}/gitea-runtime-${{ matrix.runtime }}"
-          ./test_images.sh ${{ matrix.runtime }} --registry $IMAGE_NAME --tag ${{ needs.build.outputs.image_tag }}
+          ./test_images.sh ${{ matrix.runtime }} --image-name $IMAGE_NAME --tag ${{ needs.build.outputs.image_tag }}
 
       - name: Security scan with Trivy
         uses: aquasecurity/trivy-action@0.30.0

@@ -9,6 +9,7 @@ NC='\033[0m' # No Color
 # 默认值
 REGISTRY="git.httpx.online/kenyon"
 TAG="latest"
+FULL_IMAGE_NAME=""
 
 # 显示帮助信息
 show_help() {
@@ -20,14 +21,12 @@ show_help() {
     echo "选项:"
     echo "  -h, --help          显示此帮助信息"
     echo "  -r, --registry      设置 Docker 注册表 (默认: $REGISTRY)"
+    echo "  --image-name NAME   指定完整的镜像名称 (覆盖 registry 和 runtime_name)"
     echo "  --tag TAG           指定要测试的镜像标签 (默认: latest)"
     exit 0
 }
 
 # 解析参数
-RUNTIME_NAME=$1
-shift
-
 while [[ $# -gt 0 ]]; do
     case $1 in
         -h|--help)
@@ -37,13 +36,26 @@ while [[ $# -gt 0 ]]; do
             REGISTRY="$2"
             shift 2
             ;;
+        --image-name)
+            FULL_IMAGE_NAME="$2"
+            shift 2
+            ;;
         --tag)
             TAG="$2"
             shift 2
             ;;
-        *)
+        -*)
             echo "未知选项: $1"
             show_help
+            ;;
+        *)
+            if [ -z "$RUNTIME_NAME" ]; then
+                RUNTIME_NAME="$1"
+            else
+                echo "未知参数: $1"
+                show_help
+            fi
+            shift
             ;;
     esac
 done
@@ -53,19 +65,33 @@ if [ -z "$RUNTIME_NAME" ]; then
     show_help
 fi
 
-IMAGE_NAME="gitea-runtime-${RUNTIME_NAME}"
-FULL_IMAGE_NAME="${REGISTRY}/${IMAGE_NAME}"
+# 如果没有指定完整镜像名称，则构造它
+if [ -z "$FULL_IMAGE_NAME" ]; then
+    IMAGE_NAME="gitea-runtime-${RUNTIME_NAME}"
+    FULL_IMAGE_NAME="${REGISTRY}/${IMAGE_NAME}"
+fi
+
+# 检查镜像是否存在于本地
+check_local_image() {
+    docker images --format "table {{.Repository}}:{{.Tag}}" | grep -q "^${FULL_IMAGE_NAME}:${TAG}$"
+    return $?
+}
 
 # 测试镜像
 test_image() {
     echo -e "\n${BLUE}🧪 开始测试镜像: ${FULL_IMAGE_NAME}:${TAG}${NC}"
 
-    # 拉取镜像
-    echo "拉取镜像..."
-    docker pull "${FULL_IMAGE_NAME}:${TAG}"
-    if [ $? -ne 0 ]; then
-        echo -e "${RED}❌ 拉取镜像 ${FULL_IMAGE_NAME}:${TAG} 失败${NC}"
-        exit 1
+    # 检查本地是否已存在镜像
+    if check_local_image; then
+        echo -e "${GREEN}✅ 镜像已存在于本地，跳过拉取步骤${NC}"
+    else
+        # 拉取镜像
+        echo "拉取镜像..."
+        docker pull "${FULL_IMAGE_NAME}:${TAG}"
+        if [ $? -ne 0 ]; then
+            echo -e "${RED}❌ 拉取镜像 ${FULL_IMAGE_NAME}:${TAG} 失败${NC}"
+            exit 1
+        fi
     fi
 
     # 运行基本测试
