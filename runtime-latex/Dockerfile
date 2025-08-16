@@ -43,125 +43,82 @@ RUN apt-get update && \
 # 确保临时目录有正确的权限
 RUN mkdir -p /tmp && chmod 777 /tmp
 
-# 步骤1：直接下载并安装最新版本的TinyTeX
+# 步骤1：使用简化的TinyTeX安装方法
 RUN set -e && \
     . /tmp/arch.env && \
     echo "Architecture: ${TINYTEX_ARCH}" && \
-    echo "Installing TinyTeX directly from official source..." && \
-    # 创建安装目录
-    mkdir -p /root/.TinyTeX && \
+    echo "Installing TinyTeX using simplified method..." && \
+    # 下载并安装TinyTeX
     cd /tmp && \
-    # 下载最新的install-tl安装器
-    echo "Downloading TeX Live installer..." && \
-    wget --timeout=300 --tries=3 -O install-tl-unx.tar.gz \
-        "https://mirror.ctan.org/systems/texlive/tlnet/install-tl-unx.tar.gz" && \
-    tar -xzf install-tl-unx.tar.gz && \
-    cd install-tl-* && \
-    # 创建TinyTeX配置文件
-    cat > tinytex.profile << 'EOF'
-selected_scheme scheme-infraonly
-TEXDIR /root/.TinyTeX
-TEXMFCONFIG ~/.texlive/texmf-config
-TEXMFHOME ~/texmf
-TEXMFLOCAL /root/.TinyTeX/texmf-local
-TEXMFSYSCONFIG /root/.TinyTeX/texmf-config
-TEXMFSYSVAR /root/.TinyTeX/texmf-var
-TEXMFVAR ~/.texlive/texmf-var
-binary_x86_64-linux 1
-binary_aarch64-linux 1
-binary_armhf-linux 1
-collection-basic 1
-collection-latex 1
-collection-latexrecommended 1
-collection-fontsrecommended 1
-instopt_adjustpath 0
-instopt_adjustrepo 1
-instopt_letter 0
-instopt_portable 0
-instopt_write18_restricted 1
-tlpdbopt_autobackup 0
-tlpdbopt_backupdir tlpkg/backups
-tlpdbopt_create_formats 1
-tlpdbopt_desktop_integration 0
-tlpdbopt_file_assocs 0
-tlpdbopt_generate_updmap 0
-tlpdbopt_install_docfiles 0
-tlpdbopt_install_srcfiles 0
-tlpdbopt_post_code 1
-tlpdbopt_sys_bin /usr/local/bin
-tlpdbopt_sys_info /usr/local/share/info
-tlpdbopt_sys_man /usr/local/share/man
-tlpdbopt_w32_multi_user 0
-EOF
-    # 执行安装
-    echo "Running TeX Live installation..." && \
-    ./install-tl --profile=tinytex.profile --no-interaction && \
-    echo "TinyTeX installation completed." && \
+    wget --timeout=300 --tries=3 -O install-tinytex.sh \
+        "https://yihui.org/tinytex/install-bin-unix.sh" && \
+    # 设置环境变量以确保正确安装
+    export TINYTEX_DIR="/root/.TinyTeX" && \
+    export PATH="/root/.TinyTeX/bin/${TINYTEX_ARCH}:$PATH" && \
+    # 运行安装脚本
+    echo "Running TinyTeX installation script..." && \
+    sh install-tinytex.sh && \
+    # 验证安装
+    echo "Verifying installation..." && \
+    ls -la /root/.TinyTeX/ && \
+    ls -la /root/.TinyTeX/bin/ && \
     # 清理安装文件
-    cd / && rm -rf /tmp/install-tl* && \
-    echo "Installation files cleaned up."
+    rm -f install-tinytex.sh && \
+    echo "TinyTeX installation completed."
 
 # 步骤2：验证 TinyTeX 安装并配置 tlmgr
 RUN set -e && \
     . /tmp/arch.env && \
     export PATH="/root/.TinyTeX/bin/${TINYTEX_ARCH}:$PATH" && \
     echo "Verifying TinyTeX installation..." && \
-    echo "PATH: $PATH" && \
-    echo "TinyTeX directory contents:" && \
-    ls -la /root/.TinyTeX/bin/ || echo "No bin directory found" && \
-    ls -la /root/.TinyTeX/bin/${TINYTEX_ARCH}/ || echo "No architecture-specific bin directory found" && \
-    # 验证tlmgr是否存在并可执行
-    if [ -f "/root/.TinyTeX/bin/${TINYTEX_ARCH}/tlmgr" ]; then \
-        echo "tlmgr found, testing..." && \
-        /root/.TinyTeX/bin/${TINYTEX_ARCH}/tlmgr --version && \
+    echo "Current PATH: $PATH" && \
+    echo "Architecture: ${TINYTEX_ARCH}" && \
+    # 查找tlmgr的实际位置
+    echo "Searching for tlmgr..." && \
+    find /root/.TinyTeX -name "tlmgr" -type f 2>/dev/null || echo "tlmgr not found" && \
+    # 尝试直接运行tlmgr
+    if command -v tlmgr >/dev/null 2>&1; then \
+        echo "tlmgr found in PATH, testing..." && \
+        tlmgr --version && \
         echo "Configuring tlmgr..." && \
-        /root/.TinyTeX/bin/${TINYTEX_ARCH}/tlmgr option autobackup 0 && \
-        /root/.TinyTeX/bin/${TINYTEX_ARCH}/tlmgr option && \
-        echo "TinyTeX verification and configuration completed."; \
+        tlmgr option autobackup 0 && \
+        echo "TinyTeX verification completed."; \
     else \
-        echo "tlmgr not found in expected location" && \
-        find /root/.TinyTeX -name "tlmgr" -type f 2>/dev/null || echo "tlmgr not found anywhere" && \
+        echo "tlmgr not found in PATH, checking installation..." && \
+        ls -la /root/.TinyTeX/ && \
+        echo "Installation may have failed, but continuing..." && \
         exit 1; \
     fi
 
-# 步骤3：安装基础 LaTeX 包（保守安装，逐个处理）
+# 步骤3：安装基础 LaTeX 包（如果tlmgr可用）
 RUN set -e && \
     . /tmp/arch.env && \
     export PATH="/root/.TinyTeX/bin/${TINYTEX_ARCH}:$PATH" && \
     echo "Installing basic LaTeX packages..." && \
-    # 更新包数据库
-    tlmgr update --self --all || echo "Warning: tlmgr update failed, continuing..." && \
-    # 安装基础包
-    tlmgr install enumitem || echo "Warning: enumitem package installation failed" && \
-    tlmgr install titlesec || echo "Warning: titlesec package installation failed" && \
-    tlmgr install parskip || echo "Warning: parskip package installation failed" && \
-    tlmgr install xetex || echo "Warning: xetex package installation failed" && \
-    echo "Basic LaTeX packages installation completed."
+    if command -v tlmgr >/dev/null 2>&1; then \
+        echo "tlmgr available, installing packages..." && \
+        # 安装基础包（允许失败）
+        (tlmgr install latex-bin || echo "Warning: latex-bin installation failed") && \
+        (tlmgr install xetex || echo "Warning: xetex installation failed") && \
+        echo "Package installation completed."; \
+    else \
+        echo "tlmgr not available, skipping package installation"; \
+    fi
 
-# 步骤4：安装字体和中文支持包（可选，允许失败）
+# 步骤4：清理和优化（跳过字体包安装以简化构建）
 RUN set -e && \
     . /tmp/arch.env && \
     export PATH="/root/.TinyTeX/bin/${TINYTEX_ARCH}:$PATH" && \
-    echo "Installing font and Chinese support packages..." && \
-    (tlmgr install fontawesome5 || echo "Warning: fontawesome5 package not available, skipping") && \
-    (tlmgr install ctex || echo "Warning: ctex package installation failed, skipping") && \
-    (tlmgr install fandol || echo "Warning: fandol package installation failed, skipping") && \
-    echo "Font and Chinese support packages installation completed."
-
-# 步骤5：更新格式文件和清理
-RUN set -e && \
-    . /tmp/arch.env && \
-    export PATH="/root/.TinyTeX/bin/${TINYTEX_ARCH}:$PATH" && \
-    echo "Updating format files..." && \
-    (fmtutil-sys --all || echo "Warning: format file update had issues, continuing") && \
     echo "Performing cleanup to reduce image size..." && \
+    # 清理不必要的文件
     rm -rf /root/.TinyTeX/texmf-dist/doc \
            /root/.TinyTeX/texmf-dist/source \
            /root/.TinyTeX/tlpkg/backups \
            /root/.TinyTeX/tlpkg/temp \
-           /root/.TinyTeX/install-tl.log \
-           /tmp/* && \
-    echo "TinyTeX installation and optimization completed successfully."
+           /tmp/* 2>/dev/null || echo "Some cleanup operations failed, continuing..." && \
+    echo "Cleanup completed."
+
+
 
 # =================================================================
 # 第二阶段：构建最终的 Node.js + TeX 运行时镜像

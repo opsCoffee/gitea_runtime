@@ -100,11 +100,8 @@ build_and_push() {
     # LaTeX镜像特殊处理
     if [ "$runtime_name" = "latex" ]; then
         echo -e "${BLUE}🔧 LaTeX镜像特殊配置...${NC}"
-        # 增加构建资源限制
-        build_command="$build_command --driver-opt env.BUILDKIT_STEP_LOG_MAX_SIZE=50000000"
-        build_command="$build_command --driver-opt env.BUILDKIT_STEP_LOG_MAX_SPEED=100000000"
-        # 为LaTeX构建设置更大的共享内存
-        build_command="$build_command --shm-size=2g"
+        # 为LaTeX构建启用更详细的输出
+        build_command="$build_command --progress=plain"
     fi
     
     # 暂时禁用缓存以确保构建稳定性
