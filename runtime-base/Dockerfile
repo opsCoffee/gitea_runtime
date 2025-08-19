@@ -23,6 +23,7 @@ RUN set -eux; \
         bash \
         git \
         openssh-client \
+        rsync \
         tzdata && \
     # 设置时区
     cp /usr/share/zoneinfo/Asia/Shanghai /etc/localtime && \
