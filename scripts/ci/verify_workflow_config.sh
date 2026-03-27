@@ -31,6 +31,7 @@ assert_contains() {
 main() {
     assert_contains "REGISTRY: ${DEFAULT_REGISTRY_HOST}" "共享 registry host"
     assert_contains "REGISTRY_NAMESPACE: ${DEFAULT_REGISTRY_NAMESPACE}" "共享 registry namespace"
+    assert_contains "FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true" "Node 24 JavaScript action 开关"
     assert_contains "runtime: [${EXPECTED_BUILD_RUNTIMES}]" "build runtime 列表"
     assert_contains "runtime: [${EXPECTED_TEST_RUNTIMES}]" "test runtime 列表"
     assert_contains "runtime: [${EXPECTED_PUSH_RUNTIMES}]" "push runtime 列表"

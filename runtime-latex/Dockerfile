@@ -148,8 +148,7 @@ LABEL org.opencontainers.image.authors="kenyon <kenyon@noreply.localhost>" \
       org.opencontainers.image.documentation="https://git.httpx.online/kenyon/gitea-runtime/src/branch/main/runtime-latex/README.md" \
       org.opencontainers.image.vendor="Gitea Runtime Project" \
       org.opencontainers.image.licenses="MIT" \
-      org.opencontainers.image.url="https://git.httpx.online/kenyon/gitea-runtime" \
-      maintainer="kenyon <kenyon@noreply.localhost>"
+      org.opencontainers.image.url="https://git.httpx.online/kenyon/gitea-runtime"
 
 ENV DEBIAN_FRONTEND=noninteractive \
     LANG=en_US.UTF-8 \

@@ -1,136 +1,72 @@
 # 基础 Node.js 运行时
 
-## 概述
+## 定位
 
-这个 Docker 镜像提供了一个基础的 Node.js 运行时环境，包含常用的开发工具。它基于 Node.js 22 Alpine 镜像，适合作为其他运行时环境的基础镜像，也可以直接用于 Node.js 应用的开发和测试。
+作为通用 Node.js 任务的基础环境，也可作为其他 runtime 的参考基线。
 
-## 特点
+## 镜像信息
 
-- 基于 Node.js 22 Alpine 的轻量级镜像
-- 包含常用开发工具：bash、curl、vim、git、openssh-client
-- 预配置时区设置（亚洲/上海）
-- 使用非 root 用户运行，增强安全性
-- 包含健康检查配置
-- 遵循 OCI 标准标签规范
+| 项目 | 值 |
+| --- | --- |
+| 基础镜像 | `node:22.6.0-alpine` |
+| 默认用户 | `nextjs` |
+| 工作目录 | `/app` |
+| 默认命令 | `node` |
+| 关键工具 | `node`, `npm`, `git`, `bash` |
 
-## 构建镜像
-
-使用以下命令构建镜像：
-
-```bash
-docker buildx build -t gitea-runtime-base:latest -f runtime-base/Dockerfile .
-```
-
-或者使用统一脚本入口：
+## 构建
 
 ```bash
+docker buildx build -t gitea-runtime-base:latest ./runtime-base
 ./scripts/runtimectl.sh build --only base
 ```
 
-## 使用方法
-
-### 基本用法
+## 最小验证
 
 ```bash
-docker run --rm gitea-runtime-base:latest node --version
+./scripts/runtimectl.sh test --only base
 ```
 
-### 最小功能测试
+## 常用用法
 
 ```bash
-docker run --rm -v $(pwd):/app -w /app gitea-runtime-base:latest node index.js
+docker run --rm -v "$(pwd):/workspace" -w /workspace \
+  gitea-runtime-base:latest node index.js
+
+docker run --rm -v "$(pwd):/workspace" -w /workspace \
+  gitea-runtime-base:latest npm install
 ```
 
-### 运行 Node.js 应用
+作为基础镜像使用：
 
-```bash
-docker run --rm -v $(pwd):/app gitea-runtime-base:latest node /app/index.js
-```
-
-### 使用 npm 安装依赖
-
-```bash
-docker run --rm -v $(pwd):/app -w /app gitea-runtime-base:latest npm install
-```
-
-### 交互式 Shell
-
-```bash
-docker run -it --rm gitea-runtime-base:latest bash
+```dockerfile
+FROM git.httpx.online/kenyon/gitea-runtime-base:latest
+WORKDIR /app
+COPY . .
+CMD ["node", "index.js"]
 ```
 
 ## 在 Gitea Actions 中使用
 
 ```yaml
-name: Node.js 应用测试
-
-on:
-  push:
-    branches: [ main ]
-  pull_request:
-    branches: [ main ]
-
 jobs:
-  test:
+  node-task:
     runs-on: ubuntu-latest
     container:
       image: git.httpx.online/kenyon/gitea-runtime-base:latest
-    
     steps:
       - uses: actions/checkout@v4
-      
-      - name: 安装依赖
-        run: npm install
-      
-      - name: 运行测试
-        run: npm test
-      
-      - name: 构建应用
-        run: npm run build
+      - run: node index.js
 ```
 
-## 环境变量
+## 预装工具与环境
 
-- `LANG=en_US.UTF-8`: 设置系统语言为英文 UTF-8 编码
-- `LANGUAGE=en_US.UTF-8`: 设置语言环境
-- `LC_ALL=en_US.UTF-8`: 设置所有本地化参数
-- `TZ=Asia/Shanghai`: 设置时区为亚洲/上海
+- 环境变量：`LANG`、`LANGUAGE`、`LC_ALL`、`TZ`
+- 运行工具：`node`、`npm`
+- 辅助工具：`bash`、`curl`、`vim`、`git`、`openssh-client`
 
-## 已安装工具
+## 安全与维护
 
-### 主要工具
-- Node.js 22
-- npm
-
-### 辅助工具
-- bash
-- curl
-- vim
-- git
-- openssh-client
-- tzdata
-
-## 安全性
-
-- 使用非 root 用户 `nextjs` 运行
-- 遵循 OCI 标准标签规范
-- 定期更新基础镜像和依赖
-- 包含健康检查配置
-
-## 作为基础镜像
-
-这个镜像可以作为其他运行时环境的基础镜像使用：
-
-```dockerfile
-FROM gitea-runtime-base:latest
-
-# 添加特定工具
-RUN apk add --no-cache your-tool
-
-# 切换到非 root 用户
-USER nextjs
-```
-
-## 维护
-
-如有问题或建议，请提交 issue 或 pull request。
+- 以非 root 用户 `nextjs` 运行
+- 默认包含健康检查
+- Dockerfile 风格维护遵循 [docs/DOCKERFILE_STYLE.md](../docs/DOCKERFILE_STYLE.md)

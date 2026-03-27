@@ -1,172 +1,69 @@
 # Claude Code 开发环境
 
-## 概述
+## 定位
 
-这个 Docker 镜像提供了一个完整的 Claude Code 开发环境，集成了 Claude Code CLI 工具和多个 MCP（Model Context Protocol）服务器。它基于 Node.js 22 Alpine 镜像，专为使用 Claude Code 进行 AI 辅助开发而设计。
+用于 Claude Code CLI、MCP 服务器和 Git hook 相关的开发任务。
 
-## 特点
+## 镜像信息
 
-- 基于 Node.js 22 Alpine 的轻量级镜像
-- 预装 Claude Code CLI 工具（版本 2.0.26）
-- 集成多个 MCP 服务器：Context7、Grep、DeepWiki、Sequential Thinking
-- 内置 Git 提交钩子模板与运行时安装脚本
-- 预配置 Git 设置（中文支持、rebase 策略）
-- 使用非 root 用户运行，增强安全性
-- 包含常用开发工具：rsync、bash、curl、vim 等
+| 项目 | 值 |
+| --- | --- |
+| 基础镜像 | `node:22.6.0-alpine` |
+| 默认用户 | `nextjs` |
+| 工作目录 | `/app` |
+| 默认命令 | `bash` |
+| 关键工具 | `claude`, `git`, `install-claude-git-hook` |
 
-## 构建镜像
-
-使用以下命令构建镜像：
+## 构建
 
 ```bash
-docker buildx build -t gitea-runtime-claudecode:latest -f runtime-claudecode/Dockerfile .
-```
-
-或者使用统一脚本入口：
-
-```bash
+docker buildx build -t gitea-runtime-claudecode:latest ./runtime-claudecode
 ./scripts/runtimectl.sh build --only claudecode
 ```
 
-## 使用方法
-
-### 基本用法
+## 最小验证
 
 ```bash
-docker run --rm gitea-runtime-claudecode:latest claude --version
+./scripts/runtimectl.sh test --only claudecode
 ```
 
-### 最小功能测试
+## 常用用法
 
 ```bash
-docker run -it --rm -v $(pwd):/app -w /app gitea-runtime-claudecode:latest install-claude-git-hook /app
+docker run -it --rm -v "$(pwd):/workspace" -w /workspace \
+  gitea-runtime-claudecode:latest claude
+
+docker run --rm -v "$(pwd):/workspace" -w /workspace \
+  gitea-runtime-claudecode:latest install-claude-git-hook /workspace
 ```
-
-### 启动 Claude Code 交互式会话
-
-```bash
-docker run -it --rm gitea-runtime-claudecode:latest claude
-```
-
-### 在项目目录中使用 Claude Code
-
-```bash
-docker run -it --rm -v $(pwd):/app -w /app gitea-runtime-claudecode:latest claude
-```
-
-### 安装 Git 提交钩子
-
-镜像会保留 `prepare-commit-msg` hook 模板，但不会在构建阶段假设宿主仓库已存在。若需要在当前项目中安装 hook，可在容器内执行：
-
-```bash
-docker run -it --rm -v $(pwd):/app -w /app gitea-runtime-claudecode:latest install-claude-git-hook /app
-```
-
-### 使用特定 MCP 服务器
-
-```bash
-docker run -it --rm -v $(pwd):/app -w /app gitea-runtime-claudecode:latest claude --mcp context7
-```
-
-## MCP 服务器配置
-
-镜像中预配置了以下 MCP 服务器：
-
-1. **Context7**: 提供上下文理解和文档搜索
-   - 类型: HTTP
-   - 端点: https://mcp.context7.com/mcp
-
-2. **Grep**: 提供代码搜索功能
-   - 类型: HTTP  
-   - 端点: https://mcp.grep.app
-
-3. **DeepWiki**: 提供深度知识库访问
-   - 类型: HTTP
-   - 端点: https://mcp.deepwiki.com/mcp
-
-4. **Sequential Thinking**: 提供顺序思维推理
-   - 类型: 本地命令
-   - 命令: npx -y @modelcontextprotocol/server-sequential-thinking
 
 ## 在 Gitea Actions 中使用
 
 ```yaml
-name: AI 辅助代码审查
-
-on:
-  pull_request:
-    branches: [ main ]
-
 jobs:
-  ai-review:
+  claude-task:
     runs-on: ubuntu-latest
     container:
       image: git.httpx.online/kenyon/gitea-runtime-claudecode:latest
-    
     steps:
       - uses: actions/checkout@v4
-      
-      - name: 使用 Claude Code 进行代码审查
-        run: |
-          # 按需安装 Git 提交钩子
-          install-claude-git-hook "$PWD"
-          
-          # 运行 Claude Code 进行代码分析
-          claude analyze --diff HEAD~1..HEAD
+      - run: claude --version
 ```
 
-## 环境变量
+## 预装工具与环境
 
-- `LANG=en_US.UTF-8`: 设置系统语言为英文 UTF-8 编码
-- `LANGUAGE=en_US.UTF-8`: 设置语言环境
-- `LC_ALL=en_US.UTF-8`: 设置所有本地化参数
-- `TZ=Asia/Shanghai`: 设置时区为亚洲/上海
+- 环境变量：`LANG`、`LANGUAGE`、`LC_ALL`、`TZ`
+- 运行工具：`claude`、`git`、`bash`
+- 辅助工具：`curl`、`vim`、`openssh-client`、`rsync`
+- Claude 配置目录：`/home/nextjs/.claude`
 
-## Git 配置
+## 补充说明
 
-镜像中预配置了以下 Git 设置：
+- 镜像内预配置了 `context7`、`grep`、`deepwiki`、`sequential-thinking` MCP 服务
+- `install-claude-git-hook` 会把模板安装到目标仓库的 `.git/hooks/prepare-commit-msg`
 
-- `pull.rebase true`: 拉取时使用 rebase 策略
-- `core.quotepath false`: 支持中文文件名显示
-- `i18n.commitencoding utf-8`: 提交信息使用 UTF-8 编码
-- `i18n.logoutputencoding utf-8`: 日志输出使用 UTF-8 编码
+## 安全与维护
 
-## 已安装工具
-
-### 主要工具
-- Node.js 22
-- Claude Code CLI (v2.0.26)
-- MCP 服务器工具
-
-### 辅助工具
-- rsync
-- bash
-- curl
-- vim
-- git
-- openssh-client
-- tzdata
-- dos2unix
-
-## 安全性
-
-- 使用非 root 用户 `nextjs` 运行
-- 定期更新基础镜像和依赖
-- MCP 服务器使用 HTTPS 连接
-- 包含健康检查配置
-
-## 自定义配置
-
-可以通过挂载配置文件来自定义 Claude Code 设置：
-
-```bash
-docker run -it --rm \
-  -v $(pwd):/app \
-  -v $(pwd)/.claude-config:/home/nextjs/.claude \
-  -w /app \
-  gitea-runtime-claudecode:latest claude
-```
-
-## 维护
-
-如有问题或建议，请提交 issue 或 pull request。
+- 以非 root 用户 `nextjs` 运行
+- Git hook 模板在运行时安装，不依赖构建阶段宿主仓库
+- Dockerfile 风格维护遵循 [docs/DOCKERFILE_STYLE.md](../docs/DOCKERFILE_STYLE.md)

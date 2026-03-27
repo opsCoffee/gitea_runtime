@@ -184,6 +184,10 @@ EOF
             error_exit "未为 runtime ${CURRENT_RUNTIME} 定义测试命令"
             ;;
     esac
+
+    # 挂载目录默认是 0700，容器内非 root 用户未必与宿主 UID 一致。
+    # 放宽为只读可遍历权限，避免测试结果依赖 UID 偶然匹配。
+    chmod -R a+rX "$TEMP_DIR"
 }
 
 check_local_image() {

@@ -23,13 +23,20 @@ RUN apk add --no-cache bash curl git python3 && \
 # =================================================================
 FROM node:lts-alpine3.20
 
+ARG GITEA_VERSION=dev
+ARG BUILD_DATE
+
 # 使用 OCI 标准标签
 LABEL org.opencontainers.image.authors="kenyon <kenyon@noreply.localhost>" \
       org.opencontainers.image.title="Gitea Runtime Markdown" \
       org.opencontainers.image.description="A lightweight Markdown linting and formatting environment for Gitea Runner" \
+      org.opencontainers.image.version="${GITEA_VERSION}" \
+      org.opencontainers.image.created="${BUILD_DATE}" \
       org.opencontainers.image.source="https://git.httpx.online/kenyon/gitea-runtime" \
+      org.opencontainers.image.documentation="https://git.httpx.online/kenyon/gitea-runtime/src/branch/main/runtime-markdown/README.md" \
       org.opencontainers.image.vendor="Gitea Runtime Project" \
-      org.opencontainers.image.licenses="MIT"
+      org.opencontainers.image.licenses="MIT" \
+      org.opencontainers.image.url="https://git.httpx.online/kenyon/gitea-runtime"
 
 # 设置环境变量
 ENV LANG=en_US.UTF-8 \

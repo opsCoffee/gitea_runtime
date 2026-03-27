@@ -1,107 +1,63 @@
 # ASUSTOR 应用运行时
 
-## 概述
+## 定位
 
-这个 Docker 镜像提供了一个轻量级的运行环境，专为 ASUSTOR NAS 设备相关的应用开发和测试设计。它基于 Alpine Linux，包含了 Python 3、Node.js、npm 和 git 等基本工具。
+用于 ASUSTOR 或轻量 NAS 相关脚本运行，适合同时需要 Python 与 Node.js 的任务。
 
-## 特点
+## 镜像信息
 
-- 基于 Alpine Linux 3.20 的超轻量级镜像
-- 预装 Python 3 环境
-- 包含 Node.js 和 npm
-- 内置 git 支持
-- 使用非 root 用户运行，增强安全性
-- 镜像体积小，启动速度快
+| 项目 | 值 |
+| --- | --- |
+| 基础镜像 | `alpine:3.20` |
+| 默认用户 | `root` |
+| 工作目录 | `/app` |
+| 默认命令 | `sh` |
+| 关键工具 | `python3`, `nodejs`, `npm`, `git` |
 
-## 构建镜像
-
-使用以下命令构建镜像：
-
-```bash
-docker buildx build -t gitea-runtime-asustor:latest -f runtime-asustor/Dockerfile .
-```
-
-或者使用统一脚本入口：
+## 构建
 
 ```bash
+docker buildx build -t gitea-runtime-asustor:latest ./runtime-asustor
 ./scripts/runtimectl.sh build --only asustor
 ```
 
-## 使用方法
-
-### 基本用法
+## 最小验证
 
 ```bash
-docker run --rm gitea-runtime-asustor:latest python3 --version
+./scripts/runtimectl.sh test --only asustor
 ```
 
-### 最小功能测试
+## 常用用法
 
 ```bash
-docker run --rm -v $(pwd):/app -w /app gitea-runtime-asustor:latest python3 script.py
-```
+docker run --rm -v "$(pwd):/workspace" -w /workspace \
+  gitea-runtime-asustor:latest python3 script.py
 
-### 运行 Python 脚本
-
-```bash
-docker run --rm -v $(pwd):/app gitea-runtime-asustor:latest python3 /app/script.py
-```
-
-### 运行 Node.js 应用
-
-```bash
-docker run --rm -v $(pwd):/app gitea-runtime-asustor:latest node /app/index.js
-```
-
-### 交互式 Shell
-
-```bash
-docker run -it --rm gitea-runtime-asustor:latest
+docker run --rm -v "$(pwd):/workspace" -w /workspace \
+  gitea-runtime-asustor:latest node index.js
 ```
 
 ## 在 Gitea Actions 中使用
 
 ```yaml
-name: ASUSTOR App Test
-
-on:
-  push:
-    branches: [ main ]
-  pull_request:
-    branches: [ main ]
-
 jobs:
-  test:
+  asustor-script:
     runs-on: ubuntu-latest
     container:
       image: git.httpx.online/kenyon/gitea-runtime-asustor:latest
-    
     steps:
       - uses: actions/checkout@v4
-      
-      - name: Run tests
-        run: |
-          python3 tests/run_tests.py
+      - run: python3 script.py
 ```
 
-## 环境变量
+## 预装工具与环境
 
-- `LANG=en_US.UTF-8`: 设置系统语言为英文 UTF-8 编码
-- `PYTHONUNBUFFERED=1`: 确保 Python 输出不被缓冲，便于日志记录
+- 环境变量：`LANG`、`LANGUAGE`、`LC_ALL`、`TZ`、`PYTHONUNBUFFERED`
+- 运行工具：`python3`、`nodejs`、`npm`
+- 辅助工具：`git`、`tzdata`
 
-## 已安装工具
+## 安全与维护
 
-- Python 3
-- Node.js
-- npm
-- git
-
-## 安全性
-
-- 使用非 root 用户 `appuser` 运行
-- 定期更新基础镜像和依赖
-- 移除不必要的缓存和临时文件
-
-## 维护
-
-如有问题或建议，请提交 issue 或 pull request。
+- **必须以 root 用户运行**：ASUSTOR 脚本通常需要系统级权限（如安装依赖、修改配置文件），使用非 root 用户会导致 Gitea Actions workflow 因权限不足而中断
+- 镜像保持单阶段、轻量化结构
+- Dockerfile 风格维护遵循 [docs/DOCKERFILE_STYLE.md](../docs/DOCKERFILE_STYLE.md)

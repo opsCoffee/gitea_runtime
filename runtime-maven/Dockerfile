@@ -11,14 +11,20 @@ FROM bellsoft/liberica-openjdk-debian:17
 ARG MAVEN_VERSION=3.9.12
 ARG MAVEN_SHA512=0a1be79f02466533fc1a80abbef8796e4f737c46c6574ede5658b110899942a94db634477dfd3745501c80aef9aac0d4f841d38574373f7e2d24cce89d694f70
 ARG MAVEN_DIST_BASE_URL=https://repo.maven.apache.org/maven2/org/apache/maven/apache-maven
+ARG GITEA_VERSION=dev
+ARG BUILD_DATE
 
 # 使用 OCI 标准标签
 LABEL org.opencontainers.image.authors="kenyon <kenyon@noreply.localhost>" \
       org.opencontainers.image.title="Gitea Runtime Maven" \
       org.opencontainers.image.description="Maven build environment for Java projects with Liberica JDK 17 and Node.js 20" \
+      org.opencontainers.image.version="${GITEA_VERSION}" \
+      org.opencontainers.image.created="${BUILD_DATE}" \
       org.opencontainers.image.source="https://git.httpx.online/kenyon/gitea-runtime" \
+      org.opencontainers.image.documentation="https://git.httpx.online/kenyon/gitea-runtime/src/branch/main/runtime-maven/README.md" \
       org.opencontainers.image.vendor="Gitea Runtime Project" \
-      org.opencontainers.image.licenses="MIT"
+      org.opencontainers.image.licenses="MIT" \
+      org.opencontainers.image.url="https://git.httpx.online/kenyon/gitea-runtime"
 
 # 设置环境变量
 ENV LANG=en_US.UTF-8 \

@@ -49,8 +49,7 @@ LABEL org.opencontainers.image.authors="kenyon <kenyon@noreply.localhost>" \
       org.opencontainers.image.documentation="https://git.httpx.online/kenyon/gitea-runtime/src/branch/main/runtime-template/README.md" \
       org.opencontainers.image.vendor="Gitea Runtime Project" \
       org.opencontainers.image.licenses="MIT" \
-      org.opencontainers.image.url="https://git.httpx.online/kenyon/gitea-runtime" \
-      maintainer="kenyon <kenyon@noreply.localhost>"
+      org.opencontainers.image.url="https://git.httpx.online/kenyon/gitea-runtime"
 
 # 设置环境变量
 ENV LANG=en_US.UTF-8 \

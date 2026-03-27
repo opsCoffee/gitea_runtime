@@ -22,6 +22,7 @@ on:
 env:
   REGISTRY: git.httpx.online
   REGISTRY_NAMESPACE: kenyon
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 # Add required permissions for security scanning
 permissions:
@@ -34,7 +35,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Verify workflow config matches shared config
         run: |
@@ -62,7 +63,7 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Get commit SHA
         id: get_sha
@@ -74,14 +75,7 @@ jobs:
           ./scripts/ci/image_env.sh "${{ matrix.runtime }}" "${{ steps.get_sha.outputs.sha }}" "$GITHUB_ENV"
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Login to Docker Registry
-        uses: docker/login-action@v3
-        with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ secrets.DOCKER_USERNAME }}
-          password: ${{ secrets.DOCKER_PASSWORD }}
+        uses: docker/setup-buildx-action@v4
 
       - name: Build image locally
         id: build_step
@@ -102,7 +96,7 @@ jobs:
           ./scripts/ci/save_image_artifact.sh "$IMAGE_REF" "$IMAGE_TAR"
           
       - name: Upload image artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ matrix.runtime }}-image
           path: ${{ matrix.runtime }}-image.tar
@@ -119,10 +113,10 @@ jobs:
     
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Download image artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: ${{ matrix.runtime }}-image
 
@@ -143,12 +137,13 @@ jobs:
           bash ./scripts/runtimectl.sh test --only ${{ matrix.runtime }} --image-name "$IMAGE_REPO" --tag ${{ needs.build.outputs.image_tag }}
 
       - name: Security scan with Trivy
-        uses: aquasecurity/trivy-action@0.30.0
+        uses: aquasecurity/trivy-action@v0.35.0
         with:
           image-ref: '${{ env.REGISTRY }}/${{ env.REGISTRY_NAMESPACE }}/gitea-runtime-${{ matrix.runtime }}:${{ needs.build.outputs.image_tag }}'
           format: 'sarif'
           output: '${{ env.SARIF_FILE }}'
           severity: 'CRITICAL,HIGH'
+          cache: 'false'
         continue-on-error: true
 
       - name: Check if SARIF file exists
@@ -165,7 +160,7 @@ jobs:
           fi
 
       - name: Upload Trivy scan results
-        uses: github/codeql-action/upload-sarif@v3
+        uses: github/codeql-action/upload-sarif@v4
         if: steps.check_sarif.outputs.sarif_exists == 'true'
         with:
           sarif_file: '${{ env.SARIF_FILE }}'
@@ -182,13 +177,13 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@v4
 
       - name: Login to Docker Registry
-        uses: docker/login-action@v3
+        uses: docker/login-action@v4
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ secrets.DOCKER_USERNAME }}
@@ -203,7 +198,7 @@ jobs:
 
       # 下载已构建和测试过的镜像
       - name: Download tested image artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: ${{ matrix.runtime }}-image
           
