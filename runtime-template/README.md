@@ -21,10 +21,10 @@
 docker buildx build -t gitea-runtime-template:latest -f runtime-template/Dockerfile .
 ```
 
-或者使用项目根目录的 `build.sh` 脚本：
+或者使用统一脚本入口：
 
 ```bash
-./build.sh --only template
+./scripts/runtimectl.sh build --only template
 ```
 
 ## 使用方法

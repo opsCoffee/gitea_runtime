@@ -11,9 +11,22 @@
 - 预装常用 LaTeX 宏包
 - 多阶段构建，优化镜像大小
 - 使用非 root 用户运行，增强安全性
+- 使用 TinyTeX 官方安装脚本“下载到文件 → 可选 SHA256 校验 → 显式执行”的安装链路，避免远程脚本管道直连执行
 - 使用清华大学 CTAN 镜像源加速包安装
 
 ## 构建镜像
+
+如需对 TinyTeX 安装脚本启用完整性校验，可在构建时传入 `TINYTEX_INSTALLER_SHA256`：
+
+```bash
+docker buildx build \
+  --build-arg TINYTEX_INSTALLER_SHA256=<sha256> \
+  -t gitea-runtime-latex:latest \
+  -f runtime-latex/Dockerfile .
+```
+
+未提供该参数时，Dockerfile 会明确输出跳过校验的提示。
+
 
 使用以下命令构建镜像：
 
@@ -21,10 +34,10 @@
 docker buildx build -t gitea-runtime-latex:latest -f runtime-latex/Dockerfile .
 ```
 
-或者使用项目根目录的 `build.sh` 脚本：
+或者使用统一脚本入口：
 
 ```bash
-./build.sh --only latex
+./scripts/runtimectl.sh build --only latex
 ```
 
 ## 使用方法
@@ -103,6 +116,7 @@ jobs:
 
 - 使用非 root 用户 `node` 运行
 - 定期更新基础镜像和依赖
+- TinyTeX 安装脚本采用“下载、可选校验、显式执行”的链路，便于后续接入固定 hash
 - 移除不必要的文档、源文件和缓存
 
 ## 维护

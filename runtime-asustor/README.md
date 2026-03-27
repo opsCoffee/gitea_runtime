@@ -21,10 +21,10 @@
 docker buildx build -t gitea-runtime-asustor:latest -f runtime-asustor/Dockerfile .
 ```
 
-或者使用项目根目录的 `build.sh` 脚本：
+或者使用统一脚本入口：
 
 ```bash
-./build.sh --only asustor
+./scripts/runtimectl.sh build --only asustor
 ```
 
 ## 使用方法
@@ -33,6 +33,12 @@ docker buildx build -t gitea-runtime-asustor:latest -f runtime-asustor/Dockerfil
 
 ```bash
 docker run --rm gitea-runtime-asustor:latest python3 --version
+```
+
+### 最小功能测试
+
+```bash
+docker run --rm -v $(pwd):/app -w /app gitea-runtime-asustor:latest python3 script.py
 ```
 
 ### 运行 Python 脚本

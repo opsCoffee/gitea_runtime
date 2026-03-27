@@ -1,6 +1,22 @@
+# =================================================================
+# Gitea Runtime: 基础 Node.js 运行时
+# =================================================================
+
 # 使用参数化的Node.js版本
 ARG NODE_VERSION=22.6.0
 FROM node:${NODE_VERSION}-alpine
+
+# 使用 OCI 标准标签
+LABEL org.opencontainers.image.authors="kenyon <kenyon@noreply.localhost>" \
+      org.opencontainers.image.title="Gitea Runtime Base" \
+      org.opencontainers.image.description="Base Node.js ${NODE_VERSION} runtime environment for Gitea Actions with essential development tools" \
+      org.opencontainers.image.version="1.0.0" \
+      org.opencontainers.image.source="https://git.httpx.online/kenyon/gitea-runtime" \
+      org.opencontainers.image.documentation="https://git.httpx.online/kenyon/gitea-runtime/src/branch/main/README.md" \
+      org.opencontainers.image.vendor="Gitea Runtime Project" \
+      org.opencontainers.image.licenses="MIT" \
+      org.opencontainers.image.url="https://git.httpx.online/kenyon/gitea-runtime" \
+      maintainer="kenyon <kenyon@noreply.localhost>"
 
 # 设置环境变量
 ENV LANG=en_US.UTF-8 \
@@ -49,14 +65,5 @@ EXPOSE 3000
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
     CMD node --version || exit 1
 
-# 使用 OCI 标准标签
-LABEL org.opencontainers.image.authors="kenyon <kenyon@noreply.localhost>" \
-      org.opencontainers.image.title="Gitea Runtime Base" \
-      org.opencontainers.image.description="Base Node.js ${NODE_VERSION} runtime environment for Gitea Actions with essential development tools" \
-      org.opencontainers.image.version="1.0.0" \
-      org.opencontainers.image.source="https://git.httpx.online/kenyon/gitea-runtime" \
-      org.opencontainers.image.documentation="https://git.httpx.online/kenyon/gitea-runtime/src/branch/main/README.md" \
-      org.opencontainers.image.vendor="Gitea Runtime Project" \
-      org.opencontainers.image.licenses="MIT" \
-      org.opencontainers.image.url="https://git.httpx.online/kenyon/gitea-runtime" \
-      maintainer="kenyon <kenyon@noreply.localhost>"
+# 设置默认命令
+CMD ["node"]

@@ -5,6 +5,8 @@
 # 构建参数
 ARG NODE_VERSION=20.17.0
 ARG TINYTEX_VERSION=2024.01
+ARG TINYTEX_INSTALLER_URL=https://yihui.org/tinytex/install-bin-unix.sh
+ARG TINYTEX_INSTALLER_SHA256=
 ARG GITEA_VERSION=dev
 ARG BUILD_DATE
 
@@ -12,6 +14,9 @@ ARG BUILD_DATE
 # 第一阶段：构建精简的 TinyTeX 环境
 # =================================================================
 FROM debian:12-slim AS tex-builder
+
+ARG TINYTEX_INSTALLER_URL=https://yihui.org/tinytex/install-bin-unix.sh
+ARG TINYTEX_INSTALLER_SHA256=
 
 ENV DEBIAN_FRONTEND=noninteractive
 
@@ -22,6 +27,7 @@ RUN apt-get update && \
         perl \
         ca-certificates \
         gnupg2 \
+        xz-utils \
         # XeTeX 运行时依赖
         libfontconfig1 \
         libfreetype6 \
@@ -32,11 +38,18 @@ RUN apt-get update && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
-# 步骤1：使用官方 TinyTeX 安装脚本（更简单可靠）
+# 步骤1：下载官方 TinyTeX 安装脚本后显式执行（避免管道直连执行远程内容）
 RUN set -e && \
     echo "Installing TinyTeX using official script..." && \
-    # 使用官方 TinyTeX 安装脚本
-    wget -qO- "https://yihui.org/tinytex/install-bin-unix.sh" | sh && \
+    wget -O /tmp/install-tinytex.sh "$TINYTEX_INSTALLER_URL" && \
+    test -s /tmp/install-tinytex.sh && \
+    if [ -n "$TINYTEX_INSTALLER_SHA256" ]; then \
+        echo "$TINYTEX_INSTALLER_SHA256  /tmp/install-tinytex.sh" | sha256sum -c -; \
+    else \
+        echo "Warning: TINYTEX_INSTALLER_SHA256 未设置，跳过安装脚本完整性校验"; \
+    fi && \
+    sh /tmp/install-tinytex.sh && \
+    rm -f /tmp/install-tinytex.sh && \
     # 验证安装
     echo "Verifying TinyTeX installation..." && \
     export PATH="$HOME/.TinyTeX/bin/x86_64-linux:$PATH" && \
@@ -120,6 +133,8 @@ FROM node:${NODE_VERSION}-bookworm-slim
 # 重新声明运行时需要的构建参数
 ARG NODE_VERSION=20.17.0
 ARG TINYTEX_VERSION=2024.01
+ARG TINYTEX_INSTALLER_URL=https://yihui.org/tinytex/install-bin-unix.sh
+ARG TINYTEX_INSTALLER_SHA256=
 ARG GITEA_VERSION=dev
 ARG BUILD_DATE
 

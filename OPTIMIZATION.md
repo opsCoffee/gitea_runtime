@@ -61,7 +61,7 @@
 
 ### 2. 构建脚本优化
 
-- 重写 `build.sh` 脚本，支持更多功能：
+- 当前已进一步收敛为 `scripts/runtimectl.sh build` 统一入口，历史独立脚本职责已下沉到 `scripts/commands/*`：
   - 命令行参数解析
   - 并行构建支持
   - 多架构构建支持
@@ -73,7 +73,7 @@
 
 ### 3. 测试自动化
 
-- 创建 `test_images.sh` 脚本，用于自动化测试镜像功能
+- 当前已进一步收敛为 `scripts/runtimectl.sh test` 统一入口，并补充 `tests/smoke/runtimectl_smoke.sh`
 - 为每个镜像添加特定的测试用例
 - 支持单独测试特定镜像
 - 彩色输出测试结果，提高可读性

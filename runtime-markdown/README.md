@@ -22,10 +22,10 @@
 docker buildx build -t gitea-runtime-markdown:latest -f runtime-markdown/Dockerfile .
 ```
 
-或者使用项目根目录的 `build.sh` 脚本：
+或者使用统一脚本入口：
 
 ```bash
-./build.sh --only markdown
+./scripts/runtimectl.sh build --only markdown
 ```
 
 ## 使用方法
@@ -93,6 +93,7 @@ jobs:
 
 - 使用非 root 用户 `appuser` 运行
 - 定期更新基础镜像和依赖
+- 构建阶段已移除不透明的远程脚本直连执行，降低供应链风险
 - 移除不必要的工具和文件，减小攻击面
 
 ## 维护

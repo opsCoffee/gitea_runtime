@@ -6,15 +6,15 @@ on:
     tags: [ 'v*' ]
     paths:
       - '.github/workflows/build.yml'
-      - 'build.sh'
-      - 'test_images.sh'
+      - 'scripts/**'
+      - 'tests/**'
       - 'runtime-*/**'
   pull_request:
     branches: [ master, main ]
     paths:
       - '.github/workflows/build.yml'
-      - 'build.sh'
-      - 'test_images.sh'
+      - 'scripts/**'
+      - 'tests/**'
       - 'runtime-*/**'
   schedule:
     - cron: '0 2 * * 1'
@@ -30,12 +30,33 @@ permissions:
   actions: read
 
 jobs:
+  verify-config:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Verify workflow config matches shared config
+        run: |
+          chmod +x ./scripts/ci/verify_workflow_config.sh
+          ./scripts/ci/verify_workflow_config.sh
+
+      - name: Verify Dockerfile safety rules
+        run: |
+          chmod +x ./scripts/ci/verify_dockerfile_safety.sh
+          ./scripts/ci/verify_dockerfile_safety.sh
+
+      - name: Run CLI smoke tests
+        run: |
+          bash ./tests/smoke/runtimectl_smoke.sh
+
   build:
+    needs: verify-config
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        runtime: [markdown, asustor, template, latex, base]
+        runtime: [markdown, asustor, template, latex, base, maven, claudecode]
     outputs:
       image_tag: ${{ steps.get_sha.outputs.sha }}
 
@@ -46,6 +67,11 @@ jobs:
       - name: Get commit SHA
         id: get_sha
         run: echo "sha=$(echo ${GITHUB_SHA::7})" >> $GITHUB_OUTPUT
+
+      - name: Set image variables
+        run: |
+          chmod +x ./scripts/ci/image_env.sh
+          ./scripts/ci/image_env.sh "${{ matrix.runtime }}" "${{ steps.get_sha.outputs.sha }}" "$GITHUB_ENV"
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -61,20 +87,19 @@ jobs:
         id: build_step
         timeout-minutes: ${{ matrix.runtime == 'latex' && 120 || 60 }}
         run: |
-          chmod +x ./build.sh
           # 为LaTeX镜像设置更多的Docker构建资源
           if [ "${{ matrix.runtime }}" = "latex" ]; then
             export DOCKER_BUILDKIT=1
             export BUILDX_NO_DEFAULT_ATTESTATIONS=1
           fi
           # 使用单平台构建以便能够加载到本地 Docker daemon
-          ./build.sh --only ${{ matrix.runtime }} --tag ${{ steps.get_sha.outputs.sha }} --platforms linux/amd64
+          bash ./scripts/runtimectl.sh build --only ${{ matrix.runtime }} --tag ${{ steps.get_sha.outputs.sha }} --platforms linux/amd64
           
       - name: Export built image
         run: |
           # 导出镜像为 tar 文件，供后续 job 使用
-          IMAGE_NAME="${{ env.REGISTRY }}/${{ env.REGISTRY_NAMESPACE }}/gitea-runtime-${{ matrix.runtime }}"
-          docker save $IMAGE_NAME:${{ steps.get_sha.outputs.sha }} -o ${{ matrix.runtime }}-image.tar
+          chmod +x ./scripts/ci/save_image_artifact.sh
+          ./scripts/ci/save_image_artifact.sh "$IMAGE_REF" "$IMAGE_TAR"
           
       - name: Upload image artifact
         uses: actions/upload-artifact@v4
@@ -90,7 +115,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        runtime: [markdown, asustor, template, latex]
+        runtime: [markdown, asustor, template, latex, base, maven, claudecode]
     
     steps:
       - name: Checkout code
@@ -100,38 +125,39 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: ${{ matrix.runtime }}-image
+
+      - name: Set image variables
+        run: |
+          chmod +x ./scripts/ci/image_env.sh
+          ./scripts/ci/image_env.sh "${{ matrix.runtime }}" "${{ needs.build.outputs.image_tag }}" "$GITHUB_ENV"
           
       - name: Load Docker image
         run: |
           # 加载之前构建的镜像
-          docker load -i ${{ matrix.runtime }}-image.tar
-          # 验证镜像已加载
-          IMAGE_NAME="${{ env.REGISTRY }}/${{ env.REGISTRY_NAMESPACE }}/gitea-runtime-${{ matrix.runtime }}"
-          docker images | grep $IMAGE_NAME
+          chmod +x ./scripts/ci/load_image_artifact.sh
+          ./scripts/ci/load_image_artifact.sh "$IMAGE_TAR" "$IMAGE_REPO"
 
       - name: Run tests on local image
-        timeout-minutes: 15
+        timeout-minutes: ${{ matrix.runtime == 'maven' && 20 || 15 }}
         run: |
-          chmod +x ./test_images.sh
-          IMAGE_NAME="${{ env.REGISTRY }}/${{ env.REGISTRY_NAMESPACE }}/gitea-runtime-${{ matrix.runtime }}"
-          ./test_images.sh ${{ matrix.runtime }} --image-name $IMAGE_NAME --tag ${{ needs.build.outputs.image_tag }}
+          bash ./scripts/runtimectl.sh test --only ${{ matrix.runtime }} --image-name "$IMAGE_REPO" --tag ${{ needs.build.outputs.image_tag }}
 
       - name: Security scan with Trivy
         uses: aquasecurity/trivy-action@0.30.0
         with:
           image-ref: '${{ env.REGISTRY }}/${{ env.REGISTRY_NAMESPACE }}/gitea-runtime-${{ matrix.runtime }}:${{ needs.build.outputs.image_tag }}'
           format: 'sarif'
-          output: 'trivy-results.sarif'
+          output: '${{ env.SARIF_FILE }}'
           severity: 'CRITICAL,HIGH'
         continue-on-error: true
 
       - name: Check if SARIF file exists
         id: check_sarif
         run: |
-          if [ -f "trivy-results.sarif" ]; then
+          if [ -f "$SARIF_FILE" ]; then
             echo "sarif_exists=true" >> $GITHUB_OUTPUT
             echo "SARIF file found"
-            ls -la trivy-results.sarif
+            ls -la "$SARIF_FILE"
           else
             echo "sarif_exists=false" >> $GITHUB_OUTPUT
             echo "SARIF file not found"
@@ -142,7 +168,7 @@ jobs:
         uses: github/codeql-action/upload-sarif@v3
         if: steps.check_sarif.outputs.sarif_exists == 'true'
         with:
-          sarif_file: 'trivy-results.sarif'
+          sarif_file: '${{ env.SARIF_FILE }}'
         continue-on-error: true
 
   push-release:
@@ -151,7 +177,8 @@ jobs:
     if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master') && needs.build.result == 'success' && (needs.test.result == 'success' || needs.test.result == 'skipped')
     strategy:
       matrix:
-        runtime: [markdown, asustor, template, latex, base]
+        runtime: [markdown, asustor, template, latex, base, maven, claudecode]
+    timeout-minutes: ${{ matrix.runtime == 'latex' && 120 || ((matrix.runtime == 'maven' || matrix.runtime == 'claudecode') && 90 || 60) }}
 
     steps:
       - name: Checkout code
@@ -172,6 +199,7 @@ jobs:
         run: |
           echo "sha=$(echo ${GITHUB_SHA::7})" >> $GITHUB_OUTPUT
           echo "date=$(date +%Y%m%d)" >> $GITHUB_OUTPUT
+          echo "IMAGE_REPO=${{ env.REGISTRY }}/${{ env.REGISTRY_NAMESPACE }}/gitea-runtime-${{ matrix.runtime }}" >> $GITHUB_ENV
 
       # 下载已构建和测试过的镜像
       - name: Download tested image artifact
@@ -181,36 +209,6 @@ jobs:
           
       - name: Push release images with latest and date tags only
         run: |
-          IMAGE_NAME="${{ env.REGISTRY }}/${{ env.REGISTRY_NAMESPACE }}/gitea-runtime-${{ matrix.runtime }}"
           DATE_TAG="v${{ steps.vars.outputs.date }}"
-          
-          if [ "${{ matrix.runtime }}" = "latex" ]; then
-            # LaTeX 镜像：只推送 AMD64 版本的 latest 和日期标签
-            echo "Processing LaTeX image (AMD64 only)..."
-            
-            # 加载已测试的 AMD64 镜像
-            docker load -i ${{ matrix.runtime }}-image.tar
-            
-            # 重新标记并推送 latest 和日期标签（不推送原始标签）
-            docker tag $IMAGE_NAME:${{ needs.build.outputs.image_tag }} $IMAGE_NAME:latest
-            docker tag $IMAGE_NAME:${{ needs.build.outputs.image_tag }} $IMAGE_NAME:$DATE_TAG
-            docker push $IMAGE_NAME:latest
-            docker push $IMAGE_NAME:$DATE_TAG
-            
-          else
-            # 其他镜像：构建并推送多架构版本的 latest 和日期标签
-            echo "Processing multi-arch image for ${{ matrix.runtime }}..."
-            
-            # 使用 buildx 构建完整的多架构镜像（包含 AMD64 + ARM64）
-            chmod +x ./build.sh
-            
-            # 构建并推送多架构镜像的 latest 和日期标签（不推送原始标签）
-            docker buildx build \
-              --platform "linux/amd64,linux/arm64" \
-              --tag "$IMAGE_NAME:latest" \
-              --tag "$IMAGE_NAME:$DATE_TAG" \
-              --build-arg "GITEA_VERSION=${{ needs.build.outputs.image_tag }}" \
-              --build-arg "BUILD_DATE=$(date -u +'%Y-%m-%dT%H:%M:%SZ')" \
-              --push \
-              "./runtime-${{ matrix.runtime }}"
-          fi
+          chmod +x ./scripts/ci/push_release_image.sh
+          ./scripts/ci/push_release_image.sh "${{ matrix.runtime }}" "$IMAGE_REPO" "${{ needs.build.outputs.image_tag }}" "$DATE_TAG"

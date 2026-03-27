@@ -1,6 +1,22 @@
+# =================================================================
+# Gitea Runtime: Claude Code 开发环境
+# =================================================================
+
 # 使用参数化的Node.js版本
 ARG NODE_VERSION=22.6.0
 FROM node:${NODE_VERSION}-alpine
+
+# 使用 OCI 标准标签
+LABEL org.opencontainers.image.authors="kenyon <kenyon@noreply.localhost>" \
+      org.opencontainers.image.title="Gitea Runtime Claude Code" \
+      org.opencontainers.image.description="Claude Code development environment with MCP servers and Git hooks for AI-assisted development" \
+      org.opencontainers.image.version="1.0.0" \
+      org.opencontainers.image.source="https://git.httpx.online/kenyon/gitea-runtime" \
+      org.opencontainers.image.documentation="https://git.httpx.online/kenyon/gitea-runtime/src/branch/main/runtime-claudecode/README.md" \
+      org.opencontainers.image.vendor="Gitea Runtime Project" \
+      org.opencontainers.image.licenses="MIT" \
+      org.opencontainers.image.url="https://git.httpx.online/kenyon/gitea-runtime" \
+      maintainer="kenyon <kenyon@noreply.localhost>"
 
 # 设置环境变量
 ENV LANG=en_US.UTF-8 \
@@ -38,18 +54,19 @@ RUN set -eux; \
 RUN echo "=== 安装 Claude Code ===" && \
     npm install -g @anthropic-ai/claude-code@2.0.26 && \
     echo "=== 配置 Claude Code 环境 ===" && \
-    cd ~ && rm -rf .claude && git clone --depth 1 https://github.com/kenyon-wong/.claude.git .claude && \
-    echo "=== 安装 Git 提交钩子 ===" && \
-    cd $GITHUB_WORKSPACE && \
-    mkdir -p .git/hooks && \
-    cp ~/.claude/hooks/prepare-commit-msg.sh .git/hooks/prepare-commit-msg && \
-    chmod +x .git/hooks/prepare-commit-msg && \
+    export HOME=/home/nextjs && mkdir -p "$HOME" && rm -rf "$HOME/.claude" "$HOME/.claude.json" && \
+    git clone --depth 1 https://github.com/kenyon-wong/.claude.git "$HOME/.claude" && \
     echo "=== 安装 MCP 服务器 ===" && \
     claude mcp add -s user -t http context7 https://mcp.context7.com/mcp && \
     claude mcp add -s user -t http grep https://mcp.grep.app && \
     claude mcp add -s user -t http deepwiki https://mcp.deepwiki.com/mcp && \
     claude mcp add-json "sequential-thinking" '{"command":"npx","args":["-y","@modelcontextprotocol/server-sequential-thinking"]}' && \
+    chown -R nextjs:nodejs "$HOME" && \
     echo "=== Claude Code 配置完成 ==="
+
+# 安装运行时辅助脚本
+COPY install-git-hook.sh /usr/local/bin/install-claude-git-hook
+RUN chmod +x /usr/local/bin/install-claude-git-hook
 
 # 设置工作目录
 WORKDIR /app
@@ -71,14 +88,5 @@ RUN git config --global pull.rebase true && \
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
     CMD node --version || exit 1
 
-# 使用 OCI 标准标签
-LABEL org.opencontainers.image.authors="kenyon <kenyon@noreply.localhost>" \
-      org.opencontainers.image.title="Gitea Runtime Base" \
-      org.opencontainers.image.description="Base Node.js ${NODE_VERSION} runtime environment for Gitea Actions with essential development tools" \
-      org.opencontainers.image.version="1.0.0" \
-      org.opencontainers.image.source="https://git.httpx.online/kenyon/gitea-runtime" \
-      org.opencontainers.image.documentation="https://git.httpx.online/kenyon/gitea-runtime/src/branch/main/README.md" \
-      org.opencontainers.image.vendor="Gitea Runtime Project" \
-      org.opencontainers.image.licenses="MIT" \
-      org.opencontainers.image.url="https://git.httpx.online/kenyon/gitea-runtime" \
-      maintainer="kenyon <kenyon@noreply.localhost>"
+# 设置默认命令
+CMD ["bash"]

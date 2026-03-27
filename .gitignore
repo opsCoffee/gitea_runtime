@@ -1,0 +1,81 @@
+# 临时构建和测试日志
+*.log
+*.tmp
+*.bak
+*.swp
+*.swo
+*~
+
+# 本地验证目录（包含临时构建日志和测试结果）
+.agent/local_validation/
+
+# 构建产物
+*.o
+*.so
+*.dylib
+*.dll
+*.exe
+*.out
+*.test
+*.class
+*.pyc
+*.pyo
+__pycache__/
+
+# 依赖目录
+node_modules/
+vendor/
+.venv/
+venv/
+env/
+
+# IDE 和编辑器文件
+.idea/
+.vscode/
+*.sublime-project
+*.sublime-workspace
+.DS_Store
+Thumbs.db
+
+# Docker 相关临时文件
+*.tar
+*.tar.gz
+docker-compose.override.yml
+
+# 环境变量文件
+.env
+.env.local
+.env.*.local
+
+# 覆盖率报告
+htmlcov/
+.coverage
+.coverage.*
+coverage.xml
+*.cover
+*.py,cover
+.cache/
+.pytest_cache/
+nosetests.xml
+coverage/
+
+# 性能分析文件
+*.prof
+*.profraw
+*.profdata
+*.gcda
+*.gcno
+*.gcov
+
+# 流水线报告（生成的临时报告）
+pipeline_reports/
+
+# 其他临时文件
+*.retry
+*.pid
+*.seed
+*.gz
+*.zip
+*.rar
+*.7z.agent/local_validation_fix/
+.agent/local_validation_fix/

@@ -6,6 +6,7 @@ FROM alpine:3.20
 
 # 使用 OCI 标准标签
 LABEL org.opencontainers.image.authors="kenyon <kenyon@noreply.localhost>" \
+      org.opencontainers.image.title="Gitea Runtime ASUSTOR" \
       org.opencontainers.image.description="A lightweight runtime environment for ASUSTOR applications" \
       org.opencontainers.image.source="https://git.httpx.online/kenyon/gitea-runtime" \
       org.opencontainers.image.vendor="Gitea Runtime Project" \
@@ -13,10 +14,16 @@ LABEL org.opencontainers.image.authors="kenyon <kenyon@noreply.localhost>" \
 
 # 设置环境变量
 ENV LANG=en_US.UTF-8 \
+    LANGUAGE=en_US.UTF-8 \
+    LC_ALL=en_US.UTF-8 \
+    TZ=Asia/Shanghai \
     PYTHONUNBUFFERED=1
 
 # 安装必要的工具并清理缓存
-RUN apk add --no-cache python3 nodejs npm git && \
+RUN apk add --no-cache python3 nodejs npm git tzdata && \
+    # 设置时区
+    cp /usr/share/zoneinfo/Asia/Shanghai /etc/localtime && \
+    echo "Asia/Shanghai" > /etc/timezone && \
     rm -rf /var/cache/apk/* /tmp/* /var/tmp/*
 
 # 创建非 root 用户
