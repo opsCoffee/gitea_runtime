@@ -19,6 +19,10 @@ on:
   schedule:
     - cron: '0 2 * * 1'
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 env:
   REGISTRY: git.httpx.online
   REGISTRY_NAMESPACE: kenyon
