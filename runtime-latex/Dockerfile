@@ -93,8 +93,11 @@ RUN export PATH="$HOME/.TinyTeX/bin/x86_64-linux:$PATH" && \
     # 安装图形支持包
     install_package graphicx && \
     install_package xcolor && \
+    install_package parskip && \
     install_package enumitem && \
     install_package titlesec && \
+    install_package fontawesome5 && \
+    install_package hyperref && \
     echo "Essential packages installation completed."
 
 # 步骤4：安装中文支持包
